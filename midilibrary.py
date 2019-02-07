@@ -162,20 +162,20 @@ class MidiLibrary:
         }
     }
 
-    def __init__(self, path):
+    def __init__(self, path, notify_init_status=None):
         """Initializes the library, if a path is a directory,
         load all midifiles in that directory
         if path specifies a midifile, only that file is loaded.
         :param path: Path to a folder containing midi-files"""
         self._database = dict()
 
-        self._load_library(path)
+        self._load_library(path, notify_init_status)
         self.test_specification = {}
 
         self.evaluation_queries = dict()
         self.queries_created = False
 
-    def _load_library(self, path):
+    def _load_library(self, path, notify_init_status=None):
         """Loads midifiles from a given directory path or
         a midifile if path is actually pointing to a file
         :param path: Path to a folder containing midi-files"""
@@ -185,16 +185,25 @@ class MidiLibrary:
         if not os.path.exists(path):
             return False
 
+        max_files = 1
+
         # load all midi files in this dir
         if os.path.isdir(path):
-            for file in os.listdir(path):
+            dir_entries = os.listdir(path)
+            max_files = len(dir_entries)
+
+            for idx, file in enumerate(dir_entries):
+                if notify_init_status is not None:
+                    notify_init_status("lib", idx, max_files, file)
                 if os.path.isdir(path + "/" + file):
                     self._load_recursive(path + "/" + file, file)
                 if file.endswith(".mid"):
                     self._add_file_to_library(path + "/" + file, file)
-
         elif os.path.isfile(path):
             self._add_file_to_library(path)
+
+        if notify_init_status is not None:
+            notify_init_status("lib", max_files, max_files, "")
 
         return True
 

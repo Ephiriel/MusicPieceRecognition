@@ -169,7 +169,7 @@ class FingerPrinting(AbstractMatchClass):
             else:
                 return self.max_score
 
-    def __init__(self, database: MidiLibrary, **kwargs):
+    def __init__(self, database: MidiLibrary, notify_init_status=None, **kwargs):
         """
         :param database: The database to perform the algorithm on
         :param kwargs: are holding custom parameters for the algorithm settings
@@ -199,8 +199,15 @@ class FingerPrinting(AbstractMatchClass):
 
         self.plot_compare_on_missmatch = kwargs.get(self.PLOT_COMPARISON, self.DEFAULT_PLOT_COMPARISON)
 
+        max_midi = database.get_length()
+
         # Create fingerprints for each midifile in the database
-        for midifile in database.get_midifiles():
+        for current, midifile in enumerate(database.get_midifiles()):
+            self.init_status = current / max_midi * 100
+
+            if notify_init_status is not None:
+                notify_init_status("fp", current, max_midi, midifile.name)
+
             if isinstance(midifile, MidiFile):
                 for fp in self.create_fingerprints(midifile):
                     fplist = self._fingerprints.get(fp.hash, None)
@@ -219,6 +226,9 @@ class FingerPrinting(AbstractMatchClass):
             self.quantile = np.percentile(lens, self.percentile)
         else:
             self.quantile = None
+
+        if notify_init_status is not None:
+            notify_init_status("fp", max_midi, max_midi, "")
 
     def create_fingerprints(self, query: MidiFile, remove_doubles=False):
         """
