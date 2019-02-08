@@ -11,7 +11,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 class Ui_LoadingLibrary(object):
     def setupUi(self, LoadingLibrary):
         LoadingLibrary.setObjectName("LoadingLibrary")
-        LoadingLibrary.resize(400, 87)
+        LoadingLibrary.resize(400, 58)
         icon = QtGui.QIcon()
         icon.addPixmap(QtGui.QPixmap("icons/database.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         icon.addPixmap(QtGui.QPixmap("icons/database.png"), QtGui.QIcon.Normal, QtGui.QIcon.On)
@@ -25,16 +25,8 @@ class Ui_LoadingLibrary(object):
         self.library_loading_task_label = QtWidgets.QLabel(LoadingLibrary)
         self.library_loading_task_label.setObjectName("library_loading_task_label")
         self.verticalLayout.addWidget(self.library_loading_task_label)
-        self.ok_button = QtWidgets.QDialogButtonBox(LoadingLibrary)
-        self.ok_button.setEnabled(False)
-        self.ok_button.setOrientation(QtCore.Qt.Horizontal)
-        self.ok_button.setStandardButtons(QtWidgets.QDialogButtonBox.Ok)
-        self.ok_button.setObjectName("ok_button")
-        self.verticalLayout.addWidget(self.ok_button)
 
         self.retranslateUi(LoadingLibrary)
-        self.ok_button.rejected.connect(LoadingLibrary.reject)
-        self.ok_button.accepted.connect(LoadingLibrary.accept)
         QtCore.QMetaObject.connectSlotsByName(LoadingLibrary)
 
     def retranslateUi(self, LoadingLibrary):

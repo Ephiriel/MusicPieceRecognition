@@ -38,10 +38,12 @@ class MidiFile:
 
     def save(self, path, filename=None):
         """Saves the midifile to filename"""
-        if filename is None:
-            filename = self.name
+        if filename is not None:
+            store_path = "{}/{}".format(path, filename)
+        else:
+            store_path = path
 
-        midi.write_midifile("{}/{}".format(path, filename), self._pattern)
+        midi.write_midifile(store_path, self._pattern)
 
     def randomize_timings(self, deviation=0.2, probability=1.0):
         """Randomly change all notes length, a note is changed with the given
@@ -186,11 +188,14 @@ class MidiFile:
         notes, _, _ = self.get_notelist(track_number=track_number)
         return min(notes)
 
-    def truncate_ticks(self, start, end):
+    def truncate_ticks(self, start, end=-1):
         startpos = 0
-        endpos = 0
+        endpos = -1
         _, _, positions = self.get_notelist(0)
         lastpos = 0
+
+        if end == -1:
+            end = len(positions) + 1
 
         for idx, pos in enumerate(positions):
             if pos >= start > lastpos:
@@ -204,13 +209,16 @@ class MidiFile:
 
         self.truncate(startpos, endpos)
 
-    def truncate(self, start, end):
+    def truncate(self, start, end=-1):
         """Truncates the midifile where start and end denotes number
         of notes from beginning. The new midisize is then end - start + 1 e.g.
         including end, start has to be < end"""
         note_count = 0
         track = self._pattern[0]
         idx = 0
+
+        if end == -1:
+            end = len(track) + 1
 
         while idx < len(track):
             msg = track[idx]
@@ -317,14 +325,38 @@ class MidiFile:
 
         if note_representation == NoteRepresentation.ABSOLUTE:
             self.abs_notelist = notes
-            self.abs_poslist = durations
-            self.abs_durlist = positions
+            self.abs_poslist = positions
+            self.abs_durlist = durations
         elif note_representation == NoteRepresentation.RELATIVE:
             self.rel_notelist = notes
-            self.rel_poslist = durations
-            self.rel_durlist = positions
+            self.rel_poslist = positions
+            self.rel_durlist = durations
 
         return notes, durations, positions
+
+    def get_bps_and_time_sig(self):
+        track = self._pattern[0]
+        bps = []
+        time_sig = []
+        pos = 0
+
+        for idx, msg in enumerate(track):
+            pos += msg.tick / (self._pattern.resolution * self.bps)
+
+            if isinstance(msg, midi.SetTempoEvent):
+                self.bps = msg.bpm/60
+                bps.append((pos, self.bps))
+
+            if isinstance(msg, midi.TimeSignatureEvent):
+                time_sig.append((pos, (msg.get_numerator(), msg.get_denominator())))
+
+        if len(bps) == 0:
+            bps.append((0, self.bps))
+
+        if len(time_sig) == 0:
+            time_sig.append((0, (4, 4)))
+
+        return bps, time_sig
 
     def get_nr_of_notes(self, track=0):
         return len(self.notes[track])

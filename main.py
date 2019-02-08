@@ -51,6 +51,7 @@ class ApplicationWindow(QMainWindow):
 
         self.library_load_dialog = None
         self.library_loader = None
+        self.library_load_thread = None
 
         # Set menu triggers
         self.ui.actionExit.triggered.connect(self.close_application)
@@ -62,12 +63,28 @@ class ApplicationWindow(QMainWindow):
         self.ui.play_pause_button.clicked.connect(self.play_clicked)
         self.ui.stop_button.clicked.connect(self.stop_clicked)
         self.ui.search_query_button.clicked.connect(self.search_clicked)
+        self.ui.zoom_in_button.clicked.connect(self.zoom_in)
+        self.ui.zoom_out_button.clicked.connect(self.zoom_out)
+
+        # slider triggers
+        self.ui.zoom_slider.sliderMoved.connect(self.zoom_slider_changed)
 
         # list triggers
         self.ui.database_item_list_widget.doubleClicked.connect(self.database_file_selected)
 
     def close_application(self):
         sys.exit()
+
+    def zoom_in(self):
+        self.ui.zoom_slider.setValue(self.ui.zoom_slider.value() + 10)
+        self.zoom_slider_changed()
+
+    def zoom_out(self):
+        self.ui.zoom_slider.setValue(self.ui.zoom_slider.value() - 10)
+        self.zoom_slider_changed()
+
+    def zoom_slider_changed(self):
+        self.ui.midiViewer.piano.set_width_scale(self.ui.zoom_slider.value())
 
     def open_library(self):
         self.midi_library_path = str(QFileDialog.getExistingDirectory(None, 'Select directory'))
@@ -79,17 +96,17 @@ class ApplicationWindow(QMainWindow):
             self.library_load_dialog.ui = Ui_LoadingLibrary()
             self.library_load_dialog.ui.setupUi(self.library_load_dialog)
 
-            thread = QThread()
+            self.library_load_thread = QThread()
             self.library_loader = self.CreateLibraryClass(self.midi_library_path, self.FINGERPRINTING_PARAMETERS)
-            self.library_loader.moveToThread(thread)
+            self.library_loader.moveToThread(self.library_load_thread)
             self.library_loader.progress_changed.connect(self.update_load_progress)
             self.library_loader.finished.connect(self.library_load_finished)
 
-            thread.started.connect(self.library_loader.create_library)
-            thread.start()
-            thread.quit()  # this will quit **as soon as thread event loop unblocks**
+            self.library_load_thread.started.connect(self.library_loader.create_library)
+            self.library_load_thread.start()
+            self.library_load_thread.quit()
 
-            self.library_load_dialog.exec_()
+            self.library_load_dialog.show()
 
     @pyqtSlot(int, str)
     def update_load_progress(self, progress, progress_text):
@@ -101,9 +118,11 @@ class ApplicationWindow(QMainWindow):
         self.midi_library = self.library_loader.midi_library
         self.search_algorithm = self.library_loader.search_algorithm
 
-        self.library_load_dialog.ui.ok_button.setEnabled(True)
+        # self.library_load_dialog.ui.ok_button.setEnabled(True)
 
         self.ui.database_item_list_widget.addItems(self.midi_library.get_midifile_names())
+
+        self.library_load_dialog.accept()
 
     class CreateLibraryClass(QObject):
         progress_changed = pyqtSignal(int, str)
@@ -162,6 +181,7 @@ class ApplicationWindow(QMainWindow):
     def database_file_selected(self, item):
         db_item = self.ui.database_item_list_widget.item(item.row()).text()
         self.ui.currently_playing_label.setText(db_item)
+        self.ui.midiViewer.piano.drawMidiFile(self.midi_library.get_midifile(db_item))
 
 def main():
     app = QApplication(sys.argv)
