@@ -21,6 +21,7 @@ class MidiFile:
         """Opens a new midi file with given string filename"""
         self._pattern = midi.read_midifile(filename)
         self.name = name
+        self.file_path = filename
 
         if self._pattern.tick_relative is False:
             self._pattern.make_ticks_rel()

@@ -1,31 +1,30 @@
 import time
-from pygame import mixer
-from pygame import midi
-import pyglet
 import tempfile
 from midifile import MidiFile
-import librosa
 import wave
+import pygame
+from pygame import mixer
+
 
 class AudioPlayer:
 
     WAV = ".wav"
     MIDI = ".mid"
     OTHER = "other"
-
     TMP = "tmp.tmp"
 
     def __init__(self):
-        mixer.init()
+        pygame.init()
         self.original_file_path = ""
         self.file_type = self.OTHER
         self.start_pos = 0
         self.is_playing = False
+        self.file_loaded = False
         self.tmp_dir = tempfile.TemporaryDirectory()
+        self.pause_mark = 0
 
     def __del__(self):
-        mixer.quit()
-        self.tmp_dir.cleanup()
+        self.close()
 
     def load(self, path):
         self.original_file_path = path
@@ -39,16 +38,21 @@ class AudioPlayer:
 
         try:
             mixer.music.load(path)
-            mixer.music.play()
-            mixer.music.pause()
+            if self.file_type != self.MIDI:
+                mixer.music.play()
+                mixer.music.pause()
         except Exception as e:
             print(e)
             # TODO: Error Popup: Filetype not supported
             pass
-            self.is_playing = False
+        self.is_playing = False
+        self.file_loaded = True
 
-    def toggle_play_pause(self):
-        if self.is_playing:
+    def toggle_play_pause(self, reset=False):
+        if not self.file_loaded:
+            return False
+
+        if reset or self.is_playing:
             self.pause()
         else:
             self.play()
@@ -56,16 +60,33 @@ class AudioPlayer:
         return self.is_playing
 
     def play(self):
-        mixer.music.unpause()
-        self.is_playing = True
+        if self.file_loaded:
+            if self.file_type == self.MIDI:
+                self.set_position(self.pause_mark)
+                mixer.music.play()
+            else:
+                mixer.music.unpause()
+            self.is_playing = True
 
     def pause(self):
-        mixer.music.pause()
-        self.is_playing = False
+        if self.file_loaded:
+            if self.file_type == self.MIDI:
+                self.pause_mark = self.get_position()
+                mixer.music.stop()
+            else:
+                mixer.music.pause()
+
+            mixer.music.pause()
+            self.is_playing = False
 
     def stop(self):
-        self.pause()
-        mixer.music.rewind()
+        if self.file_type == self.OTHER:
+            self.pause()
+            mixer.music.rewind()
+        else:
+            self.load(self.original_file_path)
+            self.pause_mark = 0
+
 
     def set_position(self, new_position):
         """
@@ -83,7 +104,7 @@ class AudioPlayer:
             try:
                 if self.file_type == self.MIDI:
                     mf = MidiFile(self.TMP, self.original_file_path)
-                    mf.truncate_ticks(5, -1)
+                    mf.truncate_ticks(new_position, -1)
                     mf.save(self.tmp_dir.name, mf.name)
                 elif self.file_type == self.WAV:
                     with wave.open(self.original_file_path, 'r') as wav, \
@@ -108,16 +129,22 @@ class AudioPlayer:
                 # TODO: Error Popup: set_pos not possible
                 pass
 
-            mixer.music.play()
-            mixer.music.pause()
+            if self.file_type != self.MIDI:
+                mixer.music.play()
+                mixer.music.pause()
 
         self.start_pos = new_position
 
         if self.is_playing:
-            mixer.music.unpause()
+            print("unpause for no reason")
+            self.play()
 
     def get_position(self):
         return mixer.music.get_pos()/1000 + self.start_pos
+
+    def close(self):
+        pygame.quit()
+        self.tmp_dir.cleanup()
 
 
 def main():

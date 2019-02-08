@@ -342,7 +342,7 @@ border-radius: 4px;
                   </property>
                   <property name="icon">
                    <iconset>
-                    <normaloff>icons/music.png</normaloff>icons/music.png</iconset>
+                    <normaloff>icons/play.png</normaloff>icons/play.png</iconset>
                   </property>
                  </widget>
                 </item>

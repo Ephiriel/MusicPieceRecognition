@@ -6,6 +6,7 @@ from PyQt5.QtWidgets import QFileDialog, QMainWindow, QApplication, QMessageBox,
 from PyQt5.QtGui import QPixmap, QIcon
 from PyQt5.QtCore import pyqtSignal, QObject, QThread, pyqtSlot
 import sys
+from player import AudioPlayer
 import os
 
 ###
@@ -30,7 +31,7 @@ class ApplicationWindow(QMainWindow):
         FingerPrinting.ELIMINATE_TOP_PERCENTILE: 99
     }
 
-    def __init__(self):
+    def __init__(self, player):
         super(ApplicationWindow, self).__init__()
 
         self.ui = Ui_MainWindow()
@@ -43,7 +44,7 @@ class ApplicationWindow(QMainWindow):
         self.query_path = ""
 
         pause_icon = QIcon()
-        pause_icon.addPixmap(QPixmap("ui/pause.png"), QIcon.Normal, QIcon.Off)
+        pause_icon.addPixmap(QPixmap("icons/pause.png"), QIcon.Normal, QIcon.Off)
         self.playIcon = self.ui.play_pause_button.icon()
         self.pauseIcon = pause_icon
 
@@ -52,6 +53,8 @@ class ApplicationWindow(QMainWindow):
         self.library_load_dialog = None
         self.library_loader = None
         self.library_load_thread = None
+
+        self.player = player
 
         # Set menu triggers
         self.ui.actionExit.triggered.connect(self.close_application)
@@ -73,7 +76,9 @@ class ApplicationWindow(QMainWindow):
         self.ui.database_item_list_widget.doubleClicked.connect(self.database_file_selected)
 
     def close_application(self):
-        sys.exit()
+        # self.player.close()
+        self.close()
+        # sys.exit()
 
     def zoom_in(self):
         self.ui.zoom_slider.setValue(self.ui.zoom_slider.value() + 10)
@@ -163,16 +168,18 @@ class ApplicationWindow(QMainWindow):
             print("nothing selected")
 
     def play_clicked(self, reset=False):
-        if reset or self.currently_playing:
+        print("play clicked")
+        self.currently_playing = self.player.toggle_play_pause(reset)
+        if reset or not self.currently_playing:
             self.ui.play_pause_button.setIcon(self.playIcon)
-            self.currently_playing = False
         else:
             self.ui.play_pause_button.setIcon(self.pauseIcon)
-            self.currently_playing = True
 
     def stop_clicked(self):
+        print("stop clicked")
         self.ui.music_position_slider.setSliderPosition(0)
         self.play_clicked(reset=True)
+        self.player.stop()
 
     def search_clicked(self):
         if self.midi_library is None:
@@ -180,15 +187,19 @@ class ApplicationWindow(QMainWindow):
 
     def database_file_selected(self, item):
         db_item = self.ui.database_item_list_widget.item(item.row()).text()
+        mf = self.midi_library.get_midifile(db_item)
         self.ui.currently_playing_label.setText(db_item)
-        self.ui.midiViewer.piano.drawMidiFile(self.midi_library.get_midifile(db_item))
+        self.ui.midiViewer.piano.drawMidiFile(mf)
+        self.player.load(mf.file_path)
 
 def main():
+    player = AudioPlayer()
     app = QApplication(sys.argv)
-
-    application = ApplicationWindow()
+    application = ApplicationWindow(player)
     application.show()
-    sys.exit(app.exec_())
+    exitcode = app.exec_()
+    player.close()
+    sys.exit(exitcode)
 
 
 if __name__ == '__main__':
