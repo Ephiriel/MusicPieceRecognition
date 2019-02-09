@@ -164,12 +164,13 @@ class MidiFile:
         """Returns the next note_off event, matching note"""
         for idx in range(offset, len(track)):
             msg = track[idx]
-            if isinstance(msg, midi.NoteOffEvent):
-                if msg.get_pitch() == note:
+            if isinstance(msg, midi.NoteEvent):
+                if msg.get_pitch() == note and (isinstance(msg, midi.NoteOffEvent) or msg.velocity == 0):
                     if return_idx:
                         return idx, msg
                     else:
                         return msg
+        return -1
 
     def get_resolution(self):
         return self._pattern.resolution
@@ -225,14 +226,15 @@ class MidiFile:
             msg = track[idx]
             if note_count > end and not isinstance(msg, midi.EndOfTrackEvent):
                 if isinstance(msg, midi.NoteOnEvent):
-                    off = self._get_note_off_event(msg.get_pitch(), track, idx)
+                    if msg.velocity > 0:
+                        off = self._get_note_off_event(msg.get_pitch(), track, idx)
+                        track.remove(off)
                     track.remove(msg)
-                    track.remove(off)
                 elif not isinstance(msg, midi.NoteOffEvent):
                     track.remove(msg)
                 else:
                     idx += 1
-            elif isinstance(msg, midi.NoteOnEvent):
+            elif isinstance(msg, midi.NoteOnEvent) and msg.velocity > 0:
                 if note_count < start:
                     off = self._get_note_off_event(msg.get_pitch(), track, idx)
                     track.remove(msg)
@@ -269,7 +271,7 @@ class MidiFile:
                 if isinstance(msg, midi.SetTempoEvent):
                     self.bps = msg.bpm/60
 
-                if isinstance(msg, midi.NoteOnEvent):
+                if isinstance(msg, midi.NoteOnEvent) and msg.velocity > 0:
                     off = self._get_note_off_event(msg.get_pitch(), track, idx)
 
                     pos += msg.tick/(self._pattern.resolution*self.bps)
@@ -367,6 +369,11 @@ class MidiFile:
 
     def __repr__(self):
         return self.name + "\n"
+
+    def get_length(self):
+        mf = midi.read_midifile(self.file_path)
+        mf.make_ticks_abs()
+        return mf[0][-1].tick /(mf.resolution*self.bps)
 
 def main():
     pass

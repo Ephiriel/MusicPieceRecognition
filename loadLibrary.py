@@ -11,11 +11,13 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 class Ui_LoadingLibrary(object):
     def setupUi(self, LoadingLibrary):
         LoadingLibrary.setObjectName("LoadingLibrary")
+        LoadingLibrary.setWindowModality(QtCore.Qt.ApplicationModal)
         LoadingLibrary.resize(400, 58)
         icon = QtGui.QIcon()
         icon.addPixmap(QtGui.QPixmap("icons/database.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         icon.addPixmap(QtGui.QPixmap("icons/database.png"), QtGui.QIcon.Normal, QtGui.QIcon.On)
         LoadingLibrary.setWindowIcon(icon)
+        LoadingLibrary.setModal(True)
         self.verticalLayout = QtWidgets.QVBoxLayout(LoadingLibrary)
         self.verticalLayout.setObjectName("verticalLayout")
         self.library_loading_progress_bar = QtWidgets.QProgressBar(LoadingLibrary)

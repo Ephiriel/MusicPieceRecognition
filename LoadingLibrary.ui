@@ -2,6 +2,9 @@
 <ui version="4.0">
  <class>LoadingLibrary</class>
  <widget class="QDialog" name="LoadingLibrary">
+  <property name="windowModality">
+   <enum>Qt::ApplicationModal</enum>
+  </property>
   <property name="geometry">
    <rect>
     <x>0</x>
@@ -17,6 +20,9 @@
    <iconset>
     <normaloff>icons/database.png</normaloff>
     <normalon>icons/database.png</normalon>icons/database.png</iconset>
+  </property>
+  <property name="modal">
+   <bool>true</bool>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>

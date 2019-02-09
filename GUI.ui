@@ -73,7 +73,7 @@
               <item>
                <layout class="QHBoxLayout" name="horizontalLayout_3">
                 <item>
-                 <spacer name="horizontalSpacer">
+                 <spacer name="horizontalSpacer_7">
                   <property name="orientation">
                    <enum>Qt::Horizontal</enum>
                   </property>
@@ -100,12 +100,8 @@
                   </property>
                  </widget>
                 </item>
-               </layout>
-              </item>
-              <item>
-               <layout class="QHBoxLayout" name="horizontalLayout_2">
                 <item>
-                 <spacer name="horizontalSpacer_2">
+                 <spacer name="horizontalSpacer">
                   <property name="orientation">
                    <enum>Qt::Horizontal</enum>
                   </property>
@@ -116,73 +112,6 @@
                    </size>
                   </property>
                  </spacer>
-                </item>
-                <item>
-                 <widget class="QToolButton" name="open_query_button">
-                  <property name="toolTip">
-                   <string>Open a query</string>
-                  </property>
-                  <property name="text">
-                   <string>...</string>
-                  </property>
-                  <property name="icon">
-                   <iconset>
-                    <normaloff>icons/open.png</normaloff>icons/open.png</iconset>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QToolButton" name="save_query_button">
-                  <property name="toolTip">
-                   <string>Save a recorded query</string>
-                  </property>
-                  <property name="text">
-                   <string>...</string>
-                  </property>
-                  <property name="icon">
-                   <iconset>
-                    <normaloff>icons/music.png</normaloff>icons/music.png</iconset>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QToolButton" name="play_query_button">
-                  <property name="text">
-                   <string>...</string>
-                  </property>
-                  <property name="icon">
-                   <iconset>
-                    <normaloff>icons/play-record.png</normaloff>icons/play-record.png</iconset>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QToolButton" name="record_query_button">
-                  <property name="toolTip">
-                   <string>record a new query</string>
-                  </property>
-                  <property name="text">
-                   <string>...</string>
-                  </property>
-                  <property name="icon">
-                   <iconset>
-                    <normaloff>icons/record.png</normaloff>icons/record.png</iconset>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QToolButton" name="search_query_button">
-                  <property name="toolTip">
-                   <string>Start a search for the selected query</string>
-                  </property>
-                  <property name="text">
-                   <string>...</string>
-                  </property>
-                  <property name="icon">
-                   <iconset>
-                    <normaloff>icons/search.png</normaloff>icons/search.png</iconset>
-                  </property>
-                 </widget>
                 </item>
                </layout>
               </item>
@@ -239,15 +168,17 @@
                </layout>
               </item>
               <item>
-               <widget class="QSlider" name="music_position_slider">
-                <property name="maximumSize">
-                 <size>
-                  <width>16777215</width>
-                  <height>10</height>
-                 </size>
-                </property>
-                <property name="styleSheet">
-                 <string notr="true">QSlider::groove:horizontal {
+               <layout class="QHBoxLayout" name="horizontalLayout_9">
+                <item>
+                 <widget class="QSlider" name="music_position_slider">
+                  <property name="maximumSize">
+                   <size>
+                    <width>16777215</width>
+                    <height>10</height>
+                   </size>
+                  </property>
+                  <property name="styleSheet">
+                   <string notr="true">QSlider::groove:horizontal {
 border: 1px solid #bbb;
 background: white;
 height: 4px;
@@ -275,9 +206,9 @@ QSlider::handle:horizontal {
 background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
     stop:0 #eee, stop:1 #ccc);
 border: 1px solid #777;
-width: 10px;
-margin-top: -2px;
-margin-bottom: -2px;
+width: 15px;
+margin-top: -3px;
+margin-bottom: -3px;
 border-radius: 2px;
 }
 
@@ -303,16 +234,121 @@ background: #eee;
 border: 1px solid #aaa;
 border-radius: 4px;
 }</string>
-                </property>
-                <property name="orientation">
-                 <enum>Qt::Horizontal</enum>
-                </property>
-               </widget>
+                  </property>
+                  <property name="maximum">
+                   <number>0</number>
+                  </property>
+                  <property name="pageStep">
+                   <number>0</number>
+                  </property>
+                  <property name="orientation">
+                   <enum>Qt::Horizontal</enum>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QLabel" name="song_time_label">
+                  <property name="minimumSize">
+                   <size>
+                    <width>75</width>
+                    <height>0</height>
+                   </size>
+                  </property>
+                  <property name="text">
+                   <string> 0:00/ 0:00</string>
+                  </property>
+                  <property name="alignment">
+                   <set>Qt::AlignCenter</set>
+                  </property>
+                 </widget>
+                </item>
+               </layout>
               </item>
               <item>
                <layout class="QHBoxLayout" name="horizontalLayout_8">
                 <item>
                  <spacer name="horizontalSpacer_3">
+                  <property name="orientation">
+                   <enum>Qt::Horizontal</enum>
+                  </property>
+                  <property name="sizeHint" stdset="0">
+                   <size>
+                    <width>40</width>
+                    <height>20</height>
+                   </size>
+                  </property>
+                 </spacer>
+                </item>
+                <item>
+                 <spacer name="horizontalSpacer_11">
+                  <property name="orientation">
+                   <enum>Qt::Horizontal</enum>
+                  </property>
+                  <property name="sizeHint" stdset="0">
+                   <size>
+                    <width>40</width>
+                    <height>20</height>
+                   </size>
+                  </property>
+                 </spacer>
+                </item>
+                <item>
+                 <spacer name="horizontalSpacer_9">
+                  <property name="orientation">
+                   <enum>Qt::Horizontal</enum>
+                  </property>
+                  <property name="sizeHint" stdset="0">
+                   <size>
+                    <width>40</width>
+                    <height>20</height>
+                   </size>
+                  </property>
+                 </spacer>
+                </item>
+                <item>
+                 <widget class="QToolButton" name="open_query_button">
+                  <property name="toolTip">
+                   <string>Open a query</string>
+                  </property>
+                  <property name="text">
+                   <string>...</string>
+                  </property>
+                  <property name="icon">
+                   <iconset>
+                    <normaloff>icons/open.png</normaloff>icons/open.png</iconset>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QToolButton" name="save_query_button">
+                  <property name="toolTip">
+                   <string>Save a recorded query</string>
+                  </property>
+                  <property name="text">
+                   <string>...</string>
+                  </property>
+                  <property name="icon">
+                   <iconset>
+                    <normaloff>icons/save-as.png</normaloff>icons/save-as.png</iconset>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QToolButton" name="search_query_button">
+                  <property name="toolTip">
+                   <string>Start a search for the selected query</string>
+                  </property>
+                  <property name="text">
+                   <string>...</string>
+                  </property>
+                  <property name="icon">
+                   <iconset>
+                    <normaloff>icons/search.png</normaloff>icons/search.png</iconset>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <spacer name="horizontalSpacer_8">
                   <property name="orientation">
                    <enum>Qt::Horizontal</enum>
                   </property>
@@ -345,6 +381,46 @@ border-radius: 4px;
                     <normaloff>icons/play.png</normaloff>icons/play.png</iconset>
                   </property>
                  </widget>
+                </item>
+                <item>
+                 <widget class="QToolButton" name="record_query_button">
+                  <property name="toolTip">
+                   <string>Record a new query</string>
+                  </property>
+                  <property name="text">
+                   <string>...</string>
+                  </property>
+                  <property name="icon">
+                   <iconset>
+                    <normaloff>icons/record.png</normaloff>icons/record.png</iconset>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <spacer name="horizontalSpacer_12">
+                  <property name="orientation">
+                   <enum>Qt::Horizontal</enum>
+                  </property>
+                  <property name="sizeHint" stdset="0">
+                   <size>
+                    <width>40</width>
+                    <height>20</height>
+                   </size>
+                  </property>
+                 </spacer>
+                </item>
+                <item>
+                 <spacer name="horizontalSpacer_10">
+                  <property name="orientation">
+                   <enum>Qt::Horizontal</enum>
+                  </property>
+                  <property name="sizeHint" stdset="0">
+                   <size>
+                    <width>40</width>
+                    <height>20</height>
+                   </size>
+                  </property>
+                 </spacer>
                 </item>
                 <item>
                  <spacer name="horizontalSpacer_4">
@@ -485,16 +561,6 @@ border-radius: 4px;
             </item>
            </widget>
           </item>
-          <item alignment="Qt::AlignRight|Qt::AlignTop">
-           <widget class="QListWidget" name="query_result_list_widget">
-            <property name="minimumSize">
-             <size>
-              <width>200</width>
-              <height>0</height>
-             </size>
-            </property>
-           </widget>
-          </item>
          </layout>
         </item>
        </layout>
@@ -519,6 +585,9 @@ border-radius: 4px;
         </item>
         <item>
          <widget class="QSlider" name="zoom_slider">
+          <property name="toolTip">
+           <string>Zoom Slider</string>
+          </property>
           <property name="minimum">
            <number>10</number>
           </property>
@@ -541,6 +610,9 @@ border-radius: 4px;
         </item>
         <item>
          <widget class="QToolButton" name="zoom_out_button">
+          <property name="toolTip">
+           <string>Zoom out</string>
+          </property>
           <property name="text">
            <string>...</string>
           </property>
@@ -552,12 +624,36 @@ border-radius: 4px;
         </item>
         <item>
          <widget class="QToolButton" name="zoom_in_button">
+          <property name="toolTip">
+           <string>Zoom in</string>
+          </property>
           <property name="text">
            <string>...</string>
           </property>
           <property name="icon">
            <iconset>
             <normaloff>icons/zoom-in.png</normaloff>icons/zoom-in.png</iconset>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QToolButton" name="lock_view_button">
+          <property name="toolTip">
+           <string>Scroll Lock</string>
+          </property>
+          <property name="text">
+           <string>...</string>
+          </property>
+          <property name="icon">
+           <iconset>
+            <normaloff>icons/padlock.png</normaloff>
+            <normalon>icons/lock.png</normalon>icons/padlock.png</iconset>
+          </property>
+          <property name="checkable">
+           <bool>true</bool>
+          </property>
+          <property name="checked">
+           <bool>true</bool>
           </property>
          </widget>
         </item>
