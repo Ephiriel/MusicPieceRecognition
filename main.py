@@ -20,7 +20,9 @@ from QtWaitingSpinner import QtWaitingSpinner
 # python -m PyQt5.uic.pyuic -x LoadingLibrary.ui -o loadLibrary.py
 ###
 
+
 class ApplicationWindow(QMainWindow):
+
     FINGERPRINTING_PARAMETERS = {
         FingerPrinting.N_OF_NOTES: 4,
         FingerPrinting.FINGERPRINT_PER_NOTES: (3, 2, 2),
