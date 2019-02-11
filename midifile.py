@@ -83,7 +83,7 @@ class MidiFile:
                     # if 1, change the note
                     if np.random.binomial(1, probability) == 1:
                         # Set both, the on and off event
-                        off = self._get_note_off_event(msg.get_pitch(), track, idx)
+                        off, _ = self._get_note_off_event(msg.get_pitch(), track, idx)
                         rnd = np.random.normal(loc=0, scale=deviation)
 
                         if rnd < 0:
@@ -109,7 +109,7 @@ class MidiFile:
                     # if 1, change the note
                     if np.random.binomial(1, probability) == 1:
                         # Set both, the on and off event
-                        off = self._get_note_off_event(msg.get_pitch(), track, idx)
+                        off, _ = self._get_note_off_event(msg.get_pitch(), track, idx)
                         msg.set_pitch(msg.get_pitch() + int(shift_amount))
                         off.set_pitch(off.get_pitch() + int(shift_amount))
         self.notes = self.get_notes()
@@ -128,11 +128,11 @@ class MidiFile:
                 if isinstance(msg, midi.NoteOnEvent):
                     # Draw a sample from a binomial distribution, that is 0 or 1,
                     # if 1, add a new note
-                    off_idx, off = self._get_note_off_event(msg.get_pitch(), track, idx, return_idx=True)
+                    off_idx, off, notelength = self._get_note_off_event(msg.get_pitch(), track, idx, return_idx=True)
                     if np.random.binomial(1, add_probability) == 1:
                         # Add a noteon and noteoff event
                         rnd = 1 + np.random.uniform(-add_length_deviation, add_length_deviation)
-                        length = int(abs(off.tick - msg.tick) * rnd)
+                        length = int(notelength * rnd)
                         pitch = int(round(np.random.normal(loc=msg.get_pitch(), scale=add_pitch_deviation)))
                         pitch = max(0, min(127, pitch))
                         on_event = midi.NoteOnEvent()
@@ -162,15 +162,20 @@ class MidiFile:
     @staticmethod
     def _get_note_off_event(note, track, offset=0, return_idx=False):
         """Returns the next note_off event, matching note"""
+        tick_diff = 0
         for idx in range(offset, len(track)):
             msg = track[idx]
+            tick_diff += msg.tick
             if isinstance(msg, midi.NoteEvent):
                 if msg.get_pitch() == note and (isinstance(msg, midi.NoteOffEvent) or msg.velocity == 0):
                     if return_idx:
-                        return idx, msg
+                        return idx, msg, tick_diff
                     else:
-                        return msg
-        return -1
+                        return msg, tick_diff
+        if return_idx:
+            return -1, -1, -1
+        else:
+            return -1, -1
 
     def get_resolution(self):
         return self._pattern.resolution
@@ -196,12 +201,15 @@ class MidiFile:
         _, _, positions = self.get_notelist(0)
         lastpos = 0
 
+        start_difference = positions[0] - start
+
         if end == -1:
             end = len(positions) + 1
 
         for idx, pos in enumerate(positions):
             if pos >= start > lastpos:
                 startpos = idx
+                start_difference = pos - start
 
             if pos > end >= lastpos:
                 endpos = idx
@@ -210,6 +218,8 @@ class MidiFile:
             lastpos = pos
 
         self.truncate(startpos, endpos)
+
+        return start_difference
 
     def truncate(self, start, end=-1):
         """Truncates the midifile where start and end denotes number
@@ -222,12 +232,16 @@ class MidiFile:
         if end == -1:
             end = len(track) + 1
 
+        start_not_reached = True
+
         while idx < len(track):
             msg = track[idx]
-            if note_count > end and not isinstance(msg, midi.EndOfTrackEvent):
+            if isinstance(msg, midi.EndOfTrackEvent):
+                break
+            if note_count > end:
                 if isinstance(msg, midi.NoteOnEvent):
                     if msg.velocity > 0:
-                        off = self._get_note_off_event(msg.get_pitch(), track, idx)
+                        off, _ = self._get_note_off_event(msg.get_pitch(), track, idx)
                         track.remove(off)
                     track.remove(msg)
                 elif not isinstance(msg, midi.NoteOffEvent):
@@ -236,13 +250,19 @@ class MidiFile:
                     idx += 1
             elif isinstance(msg, midi.NoteOnEvent) and msg.velocity > 0:
                 if note_count < start:
-                    off = self._get_note_off_event(msg.get_pitch(), track, idx)
+                    off, _ = self._get_note_off_event(msg.get_pitch(), track, idx)
                     track.remove(msg)
                     track.remove(off)
                 else:
+                    # The first note will have tick value of 0
+                    if start_not_reached:
+                        start_not_reached = False
+                        msg.tick = 0
                     idx += 1
                 note_count += 1
             else:
+                if note_count <= start:
+                    msg.tick = 0
                 idx += 1
 
         self.notes = self.get_notes()
@@ -271,16 +291,16 @@ class MidiFile:
                 if isinstance(msg, midi.SetTempoEvent):
                     self.bps = msg.bpm/60
 
+                pos += msg.tick/(self._pattern.resolution*self.bps)
+
                 if isinstance(msg, midi.NoteOnEvent) and msg.velocity > 0:
-                    off = self._get_note_off_event(msg.get_pitch(), track, idx)
+                    _, offset = self._get_note_off_event(msg.get_pitch(), track, idx + 1)
 
-                    pos += msg.tick/(self._pattern.resolution*self.bps)
-                    duration = off.tick/(self._pattern.resolution*self.bps)
+                    duration = offset/(self._pattern.resolution*self.bps)
 
-                    tr.append((off.get_pitch(), duration, pos, note_idx))
+                    tr.append((msg.get_pitch(), duration, pos, note_idx))
 
                     note_idx += 1
-                    pos += duration
 
         return tracks
 

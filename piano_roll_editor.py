@@ -5,6 +5,7 @@ A piano roll viewer/editor
 from PyQt5 import QtGui, QtCore, QtWidgets
 from midifile import MidiFile
 import numpy as np
+import os
 
 
 class NoteItem(QtWidgets.QGraphicsRectItem):
@@ -18,10 +19,10 @@ class NoteItem(QtWidgets.QGraphicsRectItem):
         self.setFlag(QtWidgets.QGraphicsItem.ItemSendsGeometryChanges)
         self.setAcceptHoverEvents(True)
 
-        self.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0, 0)))
+        self.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0, 100)))
         self.orig_brush = QtGui.QColor(100, 0, 0)
         self.hover_brush = QtGui.QColor(200, 200, 100)
-        self.select_brush = QtGui.QColor(150, 50, 50)
+        self.select_brush = QtGui.QColor(210, 190, 77)
         self.highlight_brush = QtGui.QColor(210, 190, 77)
         self.setBrush(self.orig_brush)
 
@@ -61,6 +62,7 @@ class NoteItem(QtWidgets.QGraphicsRectItem):
 
     def moveEvent(self, event):
         pass
+
 
 class PianoKeyItem(QtWidgets.QGraphicsRectItem):
     def __init__(self, width, height, parent):
@@ -135,8 +137,20 @@ class PianoRoll(QtWidgets.QGraphicsScene):
         self.header = None
         self.play_head = None
 
-        self.setMeasures(10)
-        self.refresh_scene()
+        self.position_pen = QtGui.QPen(QtGui.QColor(255, 0, 0, 120))
+        self.position_indicator = None
+        self.create_position_indicator()
+
+        self.reset_view()
+
+    def create_position_indicator(self):
+        self.position_indicator = QtWidgets.QGraphicsRectItem(0, 0, 1, self.piano_height +
+                                                              self.header_height -
+                                                              self.position_pen.width())
+        self.position_indicator.setPen(self.position_pen)
+        self.position_indicator.setPos(self.piano_width, 0.5 * self.position_pen.width())
+        self.position_indicator.setVisible(False)
+        self.addItem(self.position_indicator)
 
     def get_grid_width(self):
         sum = 0
@@ -186,6 +200,13 @@ class PianoRoll(QtWidgets.QGraphicsScene):
                 new_measure = self.get_measure(act_measure_pos / self.one_second_width)
                 self.measures.append(new_measure)
                 act_measure_pos += new_measure[0]
+
+    def reset_view(self):
+        self.notes.clear()
+        self.set_note_limit(0, 127)
+        self.setMeasures(0)
+        self.setMeasures(10)
+        self.refresh_scene()
 
     def get_num_measures(self):
         return len(self.measures)
@@ -242,14 +263,16 @@ class PianoRoll(QtWidgets.QGraphicsScene):
                 key.setBrush(QtGui.QColor(255, 255, 255))
                 key.setPos(0, self.note_height * (i - self.lowest_note))
             if octave_note == 11:
-                label = QtWidgets.QGraphicsSimpleTextItem('C{}'.format(int(self.highest_note / self.notes_in_octave) - int(i / self.notes_in_octave) + int(self.lowest_note / self.notes_in_octave) - 1), key)
+                label = QtWidgets.QGraphicsSimpleTextItem('C{}'.format(
+                    int(self.highest_note / self.notes_in_octave) - int(i / self.notes_in_octave) + int(
+                        self.lowest_note / self.notes_in_octave) - 1), key)
                 label.setPos(self.piano_width - 20, 5)
                 label.setFont(piano_label)
 
     def draw_grid(self):
         clearpen = QtGui.QPen(QtGui.QColor(0, 0, 0, 0))
 
-        for i in range(self.highest_note, self.lowest_note-1, -1):
+        for i in range(self.highest_note, self.lowest_note - 1, -1):
             scale_bar = QtWidgets.QGraphicsRectItem(0, 0, self.get_grid_width(), self.note_height, self.piano)
             scale_bar.setPos(self.piano_width, self.note_height * (i - self.lowest_note))
             scale_bar.setPen(clearpen)
@@ -272,7 +295,7 @@ class PianoRoll(QtWidgets.QGraphicsScene):
                 n_string = '%d' % (i + 1)
                 number = QtWidgets.QGraphicsSimpleTextItem(n_string, self.header)
                 n_width = QtGui.QFontMetrics(self.font()).width(n_string)
-                number.setPos(sum_pos + self.measures[i][0]/2 - n_width/2, 2)
+                number.setPos(sum_pos + self.measures[i][0] / 2 - n_width / 2, 2)
                 number.setBrush(QtCore.Qt.white)
                 for j in range(int(self.measures[i][1])):
                     line = QtWidgets.QGraphicsLineItem(0, 0, 0, self.piano_height, self.header)
@@ -297,6 +320,7 @@ class PianoRoll(QtWidgets.QGraphicsScene):
         self.draw_grid()
         self.draw_play_head()
 
+        self.create_position_indicator()
         if self.views():
             self.views()[0].setSceneRect(self.itemsBoundingRect())
 
@@ -320,8 +344,8 @@ class PianoRoll(QtWidgets.QGraphicsScene):
 
         info = (note_num, note_start, note_length, note_velocity)
 
-        if note_start*self.one_second_width >= self.get_grid_width():
-            while note_start*self.one_second_width >= self.get_grid_width():
+        if note_start * self.one_second_width >= self.get_grid_width():
+            while note_start * self.one_second_width >= self.get_grid_width():
                 self.setMeasures(self.get_num_measures() + 1)
             self.refresh_scene()
 
@@ -338,7 +362,7 @@ class PianoRoll(QtWidgets.QGraphicsScene):
         return note
 
     def get_note_x_start(self, note_start):
-        return self.piano_width + self.one_second_width*note_start
+        return self.piano_width + self.one_second_width * note_start
 
     def get_note_x_length(self, note_length):
         return float(note_length * self.one_second_width)
@@ -360,8 +384,6 @@ class PianoRollView(QtWidgets.QGraphicsView):
 
         self.setAlignment(QtCore.Qt.AlignLeft)
         self.o_transform = self.transform()
-        self.zoom_x = 1
-        self.zoom_y = 1
 
 
 class PianoWidget(QtWidgets.QWidget):
@@ -388,30 +410,42 @@ class PianoWidget(QtWidgets.QWidget):
         self.resize(500, 500)
         self.view.setFocus()
 
-    def draw_midi_file(self, mf: MidiFile, select=-1):
-        self.midifile = mf
+    def draw_midi_file(self, mf, select=None, set_y_to_default=True):
+        if isinstance(mf, str):
+            queryname = os.path.basename(mf)
+            self.midifile = MidiFile(queryname, mf)
+        elif isinstance(mf, MidiFile):
+            self.midifile = mf
+        else:
+            self.reset_view()
+            return
+
         self.select = select
 
         self.piano.notes.clear()
 
-        select_from = select
-        select_to = select
-
-        if isinstance(select, tuple):
+        if isinstance(select, int):
+            select_from = select
+            select_to = select
+        elif isinstance(select, tuple):
             select_from = select[0]
             if len(select) == 1:
                 select_to = select[0]
             else:
                 select_to = select[1]
+        else:
+            select_from = -1
+            select_to = -1
 
         notes, durations, positions = self.midifile.get_notelist()
-        highest_note = mf.get_highest_note()
-        lowest_note = mf.get_lowest_note()
-        bps, time_sig = mf.get_bps_and_time_sig()
+        highest_note = self.midifile.get_highest_note()
+        lowest_note = self.midifile.get_lowest_note()
+        bps, time_sig = self.midifile.get_bps_and_time_sig()
 
         padding = self.padding
-        max_notes_in_window = int((self.view.viewport().height() - self.piano.header_height)/ self.piano.note_height) - 1
-        if highest_note - lowest_note + padding*2 < max_notes_in_window:
+        max_notes_in_window = int(
+            (self.view.viewport().height() - self.piano.header_height) / self.piano.note_height) - 1
+        if highest_note - lowest_note + padding * 2 < max_notes_in_window:
             padding = int((max_notes_in_window - (highest_note - lowest_note)) / 2)
 
         self.piano.set_note_limit(max(0, lowest_note - padding), min(127, highest_note + padding))
@@ -421,10 +455,30 @@ class PianoWidget(QtWidgets.QWidget):
         self.piano.time_sig = time_sig
         self.piano.bps = bps
 
+        selected_ysum = 0
+        selected_cnt = 0
+        ysum = 0
+        cnt = 0
         for idx in reversed(range(len(notes))):
             note = self.piano.draw_note(notes[idx], positions[idx], durations[idx])
-            if select_from - 0.5 < positions[idx] < select_to + 0.5:
+            ysum += note.y()
+            cnt += 1
+            if select_from <= positions[idx] <= select_to:
                 note.set_selected(True)
+                selected_ysum += note.y()
+                selected_cnt += 1
+
+        if set_y_to_default:
+            if select is None:
+                self.view.centerOn(0, ysum/cnt)
+            else:
+                self.view.centerOn(0, selected_ysum/selected_cnt)
+
+        self.piano.position_indicator.setVisible(True)
+
+    def reset_view(self):
+        self.midifile = None
+        self.piano.reset_view()
 
     def set_width_scale(self, new_scale):
         self.piano.one_second_width = new_scale
@@ -437,20 +491,34 @@ class PianoWidget(QtWidgets.QWidget):
             self.piano.refresh_scene()
 
     def set_play_style(self, enadisable: bool):
+        if not enadisable:
+            self.position_bar(False)
+            self.piano.position_indicator.setVisible(False)
+
         self.play_mode = enadisable
 
-    def highlight_note(self, pos, autoscroll=True):
-        if self.play_mode:
+    def position_bar(self, pos, autoscroll=True):
+        if self.midifile is not None:
+            pixel_pos = pos * self.piano.one_second_width
+            visible_rect = self.view.mapToScene(self.view.viewport().geometry()).boundingRect()
+            xpos = pixel_pos + self.view.viewport().width() * 0.2
+            ymid = visible_rect.y() + (visible_rect.height() / 2) - 1
+            new_y_center = ymid
+
             for note in self.piano.notes:
                 if isinstance(note, NoteItem):
                     if note.note_start <= pos < note.note_start + note.note_length:
-                        note.set_highlighted(True)
                         if autoscroll:
-                            self.view.centerOn(pos * self.piano.one_second_width + self.view.viewport().width()*0.2, self.view.height()/2)
-                            if not note.isVisible():
-                                self.view.centerOn(pos * self.piano.one_second_width, note.y())
-                    else:
-                        note.set_highlighted(False)
+                            if note.y() - self.piano.note_height < visible_rect.y():
+                                new_y_center = ymid - (visible_rect.y() - note.y() + self.piano.note_height)
+                            elif visible_rect.y() + visible_rect.height() < note.y() + self.piano.note_height*2:
+                                new_y_center = ymid + (note.y() - visible_rect.y() - visible_rect.height() + self.piano.note_height*2)
+
+            if autoscroll:
+                self.view.centerOn(xpos, new_y_center)
+
+            self.piano.position_indicator.setVisible(True)
+            self.piano.position_indicator.setPos(pixel_pos + self.piano.piano_width, 0.5 * self.piano.position_pen.width())
 
 
 if __name__ == '__main__':
@@ -483,5 +551,5 @@ if __name__ == '__main__':
 
     # import time
     # time.sleep(5)
-    main.piano.set_width_scale(20)
+    main.set_width_scale(20)
     sys.exit(app.exec_())

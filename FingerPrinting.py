@@ -37,9 +37,9 @@ class FingerPrinting(AbstractMatchClass):
     # Default parameters for FingerPrint-Hash
     DEFAULT_HASH = 3
     DEFAULT_TDR_RANGE = 8.0
-    DEFAULT_TDR_RESOLUTION = 256
+    DEFAULT_TDR_RESOLUTION = 16
     DEFAULT_TDR_WINDOW = 0.25
-    DEFAULT_TDR_MASK = 0x000000FF
+    DEFAULT_TDR_MASK = 0x0000001F
     DEFAULT_USE_VERIFICATION = False
     DEFAULT_PLOT_COMPARISON = False
 
@@ -88,21 +88,14 @@ class FingerPrinting(AbstractMatchClass):
         ELIMINATE_TOP_PERCENTILE: 99
     }
 
-    class QueryList(list):
-        """
-        List, that can hold a midifiles as a separate field.
-        """
-        def __init__(self, midifile, **kwargs):
-            super().__init__(kwargs)
-            self.midifile = midifile
-
     class FingerPrintList(list):
         """
         This FingerPrintList calculates automatically the diagonal score
         of the fingerprint-algorithm, when a matched fingerprint-pair is appended
         or removed.
         """
-        def __init__(self, midifile, query_fingerprints, **kwargs):
+
+        def __init__(self, db_name, query_fingerprints, query_notes, query_name, **kwargs):
             """
             Initialize function
             :param midifile: The midifile in the database
@@ -110,10 +103,13 @@ class FingerPrinting(AbstractMatchClass):
             :param kwargs: for super-class
             """
             super().__init__(kwargs)
-            self.midifile = midifile
+            self.db_name = db_name
             self.query_fingerprints = query_fingerprints
+            self.query_name = query_name
+            self.query_notes = query_notes
             self.histogram = collections.Counter()
-            self.max_score = -1
+            self.fps_in_bins = dict()
+            self.max_score = None
 
         def append(self, matched_pair):
             """
@@ -131,11 +127,17 @@ class FingerPrinting(AbstractMatchClass):
             # Update the histogram-diagonal score
             hpos = int(round(mfp.pos1 - qfp.pos1 * r))
             self.histogram[hpos] += 1
+            bin_x = self.fps_in_bins.get(hpos, None)
+            if bin_x is None:
+                bin_x = []
+                self.fps_in_bins[hpos] = bin_x
+
+            bin_x.append(mfp)
             new_score = self.histogram[hpos]
 
             # update the maximum score, if a higher one is reached
-            if new_score > self.max_score:
-                self.max_score = new_score
+            if self.max_score is None or new_score > self.max_score[1]:
+                self.max_score = (hpos, new_score)
 
         def remove(self, matched_pair):
             super().remove(matched_pair)
@@ -151,23 +153,29 @@ class FingerPrinting(AbstractMatchClass):
             self.histogram[hpos] -= 1
 
             # Score needs to be reevaluated
-            if old_score == self.max_score:
-                self.max_score = -1  # clear max_score, so it has to be recalculated
+            if old_score == self.max_score[1]:
+                self.max_score = None  # clear max_score, so it has to be recalculated
 
         def get_score(self):
             """
             Returns the highest diagonal score of the histogram
             :return: Highest score
             """
-            if self.max_score == -1:
+            if self.max_score is None:
                 highest_score = self.histogram.most_common(1)
                 if len(highest_score) > 0:
-                    self.max_score = highest_score[0][1]
+                    self.max_score = highest_score[0]
                     return self.max_score
                 else:
-                    return -1
+                    return (-1, -1)
             else:
                 return self.max_score
+
+        def __str__(self):
+            return self.db_name + str(self.get_score()[1])
+
+        def __repr__(self):
+            return self.db_name + str(self.get_score()[1])
 
     def __init__(self, database: MidiLibrary, notify_init_status=None, **kwargs):
         """
@@ -197,8 +205,6 @@ class FingerPrinting(AbstractMatchClass):
                                                 kwargs.get(self.TDR_WINDOW, self.DEFAULT_TDR_WINDOW),
                                                 kwargs.get(self.TDR_MASK, self.DEFAULT_TDR_MASK))
 
-        self.plot_compare_on_missmatch = kwargs.get(self.PLOT_COMPARISON, self.DEFAULT_PLOT_COMPARISON)
-
         max_midi = database.get_length()
 
         # Create fingerprints for each midifile in the database
@@ -209,7 +215,7 @@ class FingerPrinting(AbstractMatchClass):
                 notify_init_status("fp", current, max_midi, midifile.name)
 
             if isinstance(midifile, MidiFile):
-                for fp in self.create_fingerprints(midifile):
+                for fp in self.create_fingerprints(np.array(midifile.notes[0]), midifile.name):
                     fplist = self._fingerprints.get(fp.hash, None)
                     # check if hash is already in the list
                     if fplist is None:
@@ -230,46 +236,46 @@ class FingerPrinting(AbstractMatchClass):
         if notify_init_status is not None:
             notify_init_status("fp", max_midi, max_midi, "")
 
-    def create_fingerprints(self, query: MidiFile, remove_doubles=False):
+    def create_fingerprints(self, query_notes, query_name, remove_doubles=False):
         """
         Creates all fingerprints for a given query: MidiFile. Optionally, fingerprints with the
         same hashvalue are not stored.
         self.N determines the used events per fingerprint.
         self.n[] determines how many fingerprints per note in the midifile will be generated
 
-        :param query: MidiFile from which fingerprints should be created
+        :param query_notes: MidiFile from which fingerprints should be created
+        :param query_name: MidiFile from which fingerprints should be created
         :param remove_doubles: only unique fingerprints are generated if True
-        :return: QueryList of fingerprints
+        :return: List of fingerprints
         """
         prev_hashes = dict()
-        fingerprints = self.QueryList(query)
-        notes = query.notes[0]
+        fingerprints = []
 
         # First iterate over all notes
-        for idx, e1 in enumerate(notes):
+        for idx, e1 in enumerate(query_notes):
             # for each note, generate n1 follow up events
-            idx2, evt2 = self._select_next_events(notes, idx, self.n[0])
+            idx2, evt2 = self._select_next_events(query_notes, idx, self.n[0])
             if evt2 is not None:
                 # iterate all follow up events
                 for offset2, e2 in enumerate(evt2):
                     # for each event selected for the second value, select n2 follow up events
-                    idx3, evt3 = self._select_next_events(notes, idx2 + offset2, self.n[1])
+                    idx3, evt3 = self._select_next_events(query_notes, idx2 + offset2, self.n[1])
                     if evt3 is not None:
                         # iterate over all selected events
                         for offset3, e3 in enumerate(evt3):
                             # generate fingerprint, if N=3
                             if self.N == 3:
-                                fp = self.FingerPrint(query, e1, e2, e3, None)
+                                fp = self.FingerPrint(query_name, e1, e2, e3, None)
                                 if not remove_doubles or prev_hashes.get(fp.hash, True):
                                     fingerprints.append(fp)
                                     prev_hashes[fp.hash] = False
                             else:
                                 # select next followup events if N=4
-                                _, evt4 = self._select_next_events(notes, idx3 + offset3, self.n[2])
+                                _, evt4 = self._select_next_events(query_notes, idx3 + offset3, self.n[2])
                                 if evt4 is not None:
                                     for e4 in evt4:
                                         # generate fingerprint
-                                        fp = self.FingerPrint(query, e1, e2, e3, e4)
+                                        fp = self.FingerPrint(query_name, e1, e2, e3, e4)
                                         if not remove_doubles or prev_hashes.get(fp.hash, True):
                                             fingerprints.append(fp)
                                             prev_hashes[fp.hash] = False
@@ -306,25 +312,43 @@ class FingerPrinting(AbstractMatchClass):
     def get_algorithm_name(self):
         return "FingerPrinting"
 
-    def search(self, query: MidiFile, evaluate=True):
+    def search(self, query, query_name="", evaluate=True, get_top_x=1):
+        qname = ""
+        if isinstance(query, MidiFile):
+            qname = query.name
+            query_notes = np.array(query.notes[0])
+        else:
+            query_notes = query
+
         dict_result = dict()
 
-        q_fingerprints, matches, should_match = self.perform_query(query)
+        q_fingerprints, matches, should_match = self.perform_query(query_notes, qname)
 
         # sort descending by max score
-        results = sorted(matches, key=lambda itm: itm.get_score(), reverse=True)
+        results = sorted(matches, key=lambda itm: itm.get_score()[1], reverse=True)
 
         # make token verification on top 5%
         if self.use_verification:
             results = self._verify_results(results)
 
         for i, match in enumerate(results, 1):
-            dict_result[match.midifile.name] = (0, i, 0)
+            pos, score = match.get_score()
+            matched_fp = match.fps_in_bins.get(pos, [])
+            from_pos = min(matched_fp, key=lambda fp: fp.pos1, default=None)
+            to_pos = max(matched_fp, key=lambda fp: fp.max_pos, default=None)
+            start = from_pos.pos1 if from_pos is not None else -1
+            stop = to_pos.max_pos if to_pos is not None else -1
+            dict_result[match.db_name] = (score, i, (start, stop))
 
-        if self.plot_compare_on_missmatch and results[0].midifile.name != query.name:
-            self._compare_plot(results[0], should_match)
-
-        return dict_result
+        if evaluate:
+            return dict_result
+        else:
+            ranked_result = []
+            for i in range(get_top_x):
+                topname = results[i].db_name
+                score, rank, pos = dict_result[topname]
+                ranked_result.append((topname, score, pos))
+            return ranked_result
 
     def _verify_results(self, results):
         """
@@ -360,8 +384,8 @@ class FingerPrinting(AbstractMatchClass):
                 compared_events = 0
                 matched_events = 0
 
-                query_notes = matches.query_fingerprints.midifile.notes[0]
-                db_notes = matches.midifile.notes[0]
+                query_notes = matches.query_notes
+                db_notes = np.array(self.database.get_midifile(matches.db_name).notes[0])
 
                 # max matches are 10 or the length of the query - 3 fingerprint-tokens
                 max_possible_matches = min(10, len(query_notes) - q_idx - 3, len(db_notes) - db_idx - 3)
@@ -388,75 +412,8 @@ class FingerPrinting(AbstractMatchClass):
                 if matched_events / max_possible_matches < 0.5:
                     matches.remove((dbfp, qfp))  # remove fingerprint from match
 
-        verified_results.sort(key=lambda itm: itm.get_score(), reverse=True)
+        verified_results.sort(key=lambda itm: itm.get_score()[1], reverse=True)
         return verified_results
-
-    @staticmethod
-    def _plot_query(matched_pairs: FingerPrintList):
-        """
-        Plots the matched pairs of fingerprints
-        :param matched_pairs:
-        :return:
-        """
-        x_pos = []
-        y_pos = []
-
-        for mfp, qfp in matched_pairs:
-            x_pos.append(mfp.pos1)
-            y_pos.append(qfp.pos1)
-
-        f, arg = plt.subplots(2)
-        arg[0].scatter(x_pos, y_pos, marker="x")
-        arg[0].set_xlabel(matched_pairs.midifile.name)
-        arg[0].set_ylabel(matched_pairs.query_fingerprints.midifile.name)
-
-        x, y = zip(*sorted(matched_pairs.histogram.items()))
-        arg[1].bar(x, y, width=1, align='center')
-        arg[1].set_xlabel("seconds [s]")
-        arg[1].set_ylabel("Matches")
-        plt.show()
-
-    @staticmethod
-    def _compare_plot(matched_pairs_1: FingerPrintList, matched_pairs_2: FingerPrintList):
-        """
-        Plot a comparison of 2 fingerprintlists-pairs
-        :param matched_pairs_1:
-        :param matched_pairs_2:
-        :return:
-        """
-        x_pos1 = []
-        y_pos1 = []
-
-        for mfp, qfp in matched_pairs_1:
-            x_pos1.append(mfp.pos1)
-            y_pos1.append(qfp.pos1)
-
-        f, arg = plt.subplots(2, 2)
-        arg[0, 0].scatter(x_pos1, y_pos1, marker="x")
-        arg[0, 0].set_xlabel(matched_pairs_1.midifile.name)
-        arg[0, 0].set_ylabel(matched_pairs_1.query_fingerprints.midifile.name)
-
-        x, y = zip(*sorted(matched_pairs_1.histogram.items()))
-        arg[1, 0].bar(x, y, width=1, align='center')
-        arg[1, 0].set_xlabel("seconds [s]")
-        arg[1, 0].set_ylabel("Matches")
-
-        x_pos2 = []
-        y_pos2 = []
-
-        for mfp, qfp in matched_pairs_2:
-            x_pos2.append(mfp.pos1)
-            y_pos2.append(qfp.pos1)
-
-        arg[0, 1].scatter(x_pos2, y_pos2, marker="x")
-        arg[0, 1].set_xlabel(matched_pairs_2.midifile.name)
-        arg[0, 1].set_ylabel(matched_pairs_2.query_fingerprints.midifile.name)
-
-        x, y = zip(*sorted(matched_pairs_2.histogram.items()))
-        arg[1, 1].bar(x, y, width=1, align='center')
-        arg[1, 1].set_xlabel("seconds [s]")
-        arg[1, 1].set_ylabel("Matches")
-        plt.show()
 
     def get_hash_value_lengths(self):
         """
@@ -468,14 +425,15 @@ class FingerPrinting(AbstractMatchClass):
             lens[idx] = len(self._fingerprints[key])
         return lens
 
-    def perform_query(self, query: MidiFile):
+    def perform_query(self, query_notes, query_name):
         """
         Search for the query by creating fingerprints of it
         and then, for each fingerprint ask for a dictionary entry.
-        :param query:
+        :param query_notes:
+        :param query_name:
         :return: the created fingerprints, a list of matched fingerprints and the "true" match for analysis
         """
-        query_fingerprints = self.create_fingerprints(query, remove_doubles=True)
+        query_fingerprints = self.create_fingerprints(query_notes, query_name, remove_doubles=True)
         matched_queries = dict()
         for fp in query_fingerprints:
             for hash_val in fp.get_hash_iterator():
@@ -483,16 +441,19 @@ class FingerPrinting(AbstractMatchClass):
                 if matched_fingerprint_list is not None:
                     if self.quantile is None or len(matched_fingerprint_list) < self.quantile:
                         for mfp in matched_fingerprint_list:  # query all files with this fingerprint
-                            matches = matched_queries.get(mfp.midifile.name, None)
+                            matches = matched_queries.get(mfp.name, None)
                             # create a new fingerprintlist, if there is a fingerprint from a new file
                             if matches is None:
-                                matches = self.FingerPrintList(mfp.midifile, query_fingerprints)
-                                matched_queries[mfp.midifile.name] = matches
+                                matches = self.FingerPrintList(mfp.name, query_fingerprints,
+                                                               query_notes, query_name)
+                                matched_queries[mfp.name] = matches
 
                             matches.append((mfp, fp))
                     break
 
-        return query_fingerprints, list(matched_queries.values()), matched_queries[query.name]
+        should_match = matched_queries.get(query_name, None)
+
+        return query_fingerprints, list(matched_queries.values()), should_match
 
     class FingerPrint(object):
         """
@@ -514,20 +475,20 @@ class FingerPrinting(AbstractMatchClass):
         TDR_K = 0
         TDR_D = 0
 
-        __slots__ = ("midifile", "name", "p1", "pos1", "idx1", "idx2", "idx3", "td12", "hash")
+        __slots__ = ("name", "p1", "pos1", "idx1", "idx2", "idx3", "td12", "hash", "max_pos")
 
-        def __init__(self, midifile, e1, e2, e3, e4):
+        def __init__(self, name, e1, e2, e3, e4):
             if not self.PARAM_INIT:
                 raise Exception("Call Fingerprint.update_class_variables() first")
 
-            object.__setattr__(self, "midifile", midifile)
-            object.__setattr__(self, "name", midifile.name)
+            object.__setattr__(self, "name", name)
             object.__setattr__(self, "p1", e1[0])
             object.__setattr__(self, "pos1", e1[2])
             object.__setattr__(self, "idx1", e1[3])
             object.__setattr__(self, "idx2", e2[3])
             object.__setattr__(self, "idx3", e3[3])
             object.__setattr__(self, "td12", e2[2] - e1[2])
+            object.__setattr__(self, "max_pos", e4[2] if self.TDR_HASH_TYPE == self.TDR_HASH_3 else e3[2])
 
             td23 = e3[2] - e2[2]
 
@@ -551,13 +512,13 @@ class FingerPrinting(AbstractMatchClass):
             # create hash value according to self.TDR_HASH_TYPE
             if self.TDR_HASH_TYPE == self.TDR_HASH_1:
                 h = int(((int(self.p1) & 0x7F) << 25) | ((int(e2[0]) & 0x7F) << 18) |
-                                ((int(e3[0]) & 0x7F) << 11) | (tdr & self.TDR_MASK))
+                        ((int(e3[0]) & 0x7F) << 11) | (tdr & self.TDR_MASK))
             elif self.TDR_HASH_TYPE == self.TDR_HASH_2:
                 h = int(((int(e2[0] - self.p1) & 0xFF) << 24) | ((int(e3[0] - e2[0]) & 0xFF) << 16) |
-                                (tdr & self.TDR_MASK))
+                        (tdr & self.TDR_MASK))
             elif self.TDR_HASH_TYPE == self.TDR_HASH_3:
                 h = int(((int(e2[0] - self.p1) & 0xFF) << 24) | ((int(e3[0] - e2[0]) & 0xFF) << 16) |
-                                ((int(e4[0] - e3[0]) & 0xFF) << 8) | (tdr & self.TDR_MASK))
+                        ((int(e4[0] - e3[0]) & 0xFF) << 8) | (tdr & self.TDR_MASK))
 
             object.__setattr__(self, "hash", h)
 

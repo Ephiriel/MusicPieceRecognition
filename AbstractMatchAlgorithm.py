@@ -22,7 +22,7 @@ class AbstractMatchClass(ABC):
         self._durations = MeasureTime()
 
     @abstractmethod
-    def search(self, query: MidiFile, evaluate=True):
+    def search(self, query, query_name="", evaluate=True, get_top_x=1):
         """This function does the actual matching
         it has to return a dictionary, where for each element in the database, the dict contains:
         [key, (score, rank, start_of_best_match)] where:
@@ -33,6 +33,8 @@ class AbstractMatchClass(ABC):
         pass
         If evaluate=False, the return value is a tuple of (name, score, position) of the best matching
         database item.
+        get_top_x determines the size of the results, if evaluate = False
+        query_name: optional give a name to the query, if query is no MidiFile-Object
         """
 
     @abstractmethod
