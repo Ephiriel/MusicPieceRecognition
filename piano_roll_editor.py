@@ -1,6 +1,7 @@
 """
 A piano roll viewer/editor
-
+Taken from https://github.com/rhetr/seq-gui
+and adopted to the needs of this project
 """
 from PyQt5 import QtGui, QtCore, QtWidgets
 from midifile import MidiFile
@@ -13,11 +14,6 @@ class NoteItem(QtWidgets.QGraphicsRectItem):
 
     def __init__(self, height, length, note_info):
         QtWidgets.QGraphicsRectItem.__init__(self, 0, 0, length, height)
-
-        self.setFlag(QtWidgets.QGraphicsItem.ItemIsMovable)
-        self.setFlag(QtWidgets.QGraphicsItem.ItemIsSelectable)
-        self.setFlag(QtWidgets.QGraphicsItem.ItemSendsGeometryChanges)
-        self.setAcceptHoverEvents(True)
 
         self.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0, 100)))
         self.orig_brush = QtGui.QColor(100, 0, 0)
@@ -411,6 +407,13 @@ class PianoWidget(QtWidgets.QWidget):
         self.view.setFocus()
 
     def draw_midi_file(self, mf, select=None, set_y_to_default=True):
+        """
+        Draw a MIDI-File
+        :param mf: The midifile to draw
+        :param select: Tuple to select notes from - to, e.g. to indicate query positions
+        :param set_y_to_default: center view on notes on init
+        :return:
+        """
         if isinstance(mf, str):
             queryname = os.path.basename(mf)
             self.midifile = MidiFile(queryname, mf)
@@ -477,10 +480,13 @@ class PianoWidget(QtWidgets.QWidget):
         self.piano.position_indicator.setVisible(True)
 
     def reset_view(self):
+        """ Unloads a MIDI-File"""
         self.midifile = None
+        self.select = None
         self.piano.reset_view()
 
     def set_width_scale(self, new_scale):
+        """ Zoom in or out of the View"""
         self.piano.one_second_width = new_scale
 
         if self.midifile is not None:
@@ -491,6 +497,7 @@ class PianoWidget(QtWidgets.QWidget):
             self.piano.refresh_scene()
 
     def set_play_style(self, enadisable: bool):
+        """ Indicates Play mode"""
         if not enadisable:
             self.position_bar(False)
             self.piano.position_indicator.setVisible(False)
@@ -498,6 +505,7 @@ class PianoWidget(QtWidgets.QWidget):
         self.play_mode = enadisable
 
     def position_bar(self, pos, autoscroll=True):
+        """ Update the red bar indication position during playing and scrolling"""
         if self.midifile is not None:
             pixel_pos = pos * self.piano.one_second_width
             visible_rect = self.view.mapToScene(self.view.viewport().geometry()).boundingRect()
@@ -524,32 +532,13 @@ class PianoWidget(QtWidgets.QWidget):
 if __name__ == '__main__':
     import sys
 
-    midifile = MidiFile("ashover1.mid", "./small_db/ashover1.mid")
+    midifile = MidiFile("ashover1.mid", "./ashover1.mid")
     print(midifile)
     app = QtWidgets.QApplication(sys.argv)
 
     main = PianoWidget()
     main.show()
-    # main.piano.drawNote(71, 0, 0.50, 20)
-    # main.piano.drawNote(73, 1, 0.50, 20)
-    # note = main.piano.drawNote(76, 2, 0.50, 20)
-    # note.setSelected(True)
-    # main.piano.drawNote(77, 3, 0.50, 20)
-    # note = main.piano.drawNote(10, 4, 0.50, 20)
-    # note = main.piano.drawNote(50, 5, 0.50, 20)
-    # note = main.piano.drawNote(50, 6, 0.50, 20)
-    # note = main.piano.drawNote(50, 7, 0.50, 20)
-    # note = main.piano.drawNote(50, 8, 0.50, 20)
-    # note = main.piano.drawNote(50, 9, 0.50, 20)
-    # note = main.piano.drawNote(50, 10, 0.50, 20)
-    # note = main.piano.drawNote(50, 11, 0.50, 20)
-    # note = main.piano.drawNote(77, 20, 0.50, 20)
     main.draw_midi_file(midifile, (5, 9))
-    # note.setSelected(True)
-    # note.setFocus()
-    # main.view.centerOn(note.x(), note.y())
 
-    # import time
-    # time.sleep(5)
     main.set_width_scale(20)
     sys.exit(app.exec_())

@@ -1,4 +1,3 @@
-from midilibrary import MidiLibrary
 from FingerPrinting import FingerPrinting
 from gui import Ui_MainWindow
 from loadLibrary import Ui_LoadingLibrary
@@ -35,7 +34,10 @@ class ApplicationWindow(QMainWindow):
         FingerPrinting.TDR_MASK: 0x1F,
         FingerPrinting.TDR_RANGE: 8.0,
         FingerPrinting.USE_VERIFICATION: False,
-        FingerPrinting.ELIMINATE_TOP_PERCENTILE: 99
+        FingerPrinting.ELIMINATE_TOP_PERCENTILE: 99,
+        FingerPrinting.SPLIT_QUERIES_LONGER_THAN: 20,
+        FingerPrinting.SPLIT_QUERIES_SLIDING_WINDOW: 5,
+        FingerPrinting.SPLIT_QUERY_LENGTH: 20
     }
 
     library_msg = pyqtSignal(str, str, int)
@@ -149,6 +151,7 @@ class ApplicationWindow(QMainWindow):
     #################################
     # LIBRARY CALLBACKS
     def add_to_library(self, clear=False):
+        """ Menu Callback, Add folder to library"""
         midi_library_path = str(QFileDialog.getExistingDirectory(None, 'Select directory', self.lib_path))
 
         # a path was actually selected
@@ -156,26 +159,34 @@ class ApplicationWindow(QMainWindow):
             if clear:
                 self.ui.database_item_list_widget.clear()
                 self.ui.result_table.setRowCount(0)
+                self.player.stop()
+                self.ui.midiViewer.reset_view()
+            else:
+                self.player.pause()
 
             self.lib_path = midi_library_path
             self._load_library(midi_library_path)
 
     def open_new_library(self):
+        """ Menu Callback, Load new Library"""
         self.add_to_library(clear=True)
 
     @pyqtSlot(int, str)
     def update_load_progress(self, progress, progress_text):
+        """ Callback for indicating library loading status"""
         self.library_load_dialog.ui.library_loading_progress_bar.setValue(progress)
         self.library_load_dialog.ui.library_loading_task_label.setText(progress_text)
 
     @pyqtSlot()
     def library_load_finished(self):
+        """ Callback when library loading has finished"""
         self.midi_library = self.library_worker.midi_library
         self.search_algorithm = self.library_worker.search_algorithm
         self.ui.database_item_list_widget.addItems(self.midi_library.get_midifile_names())
         self.library_load_dialog.accept()
 
     def _load_library(self, path):
+        """ Helper function to start library add"""
         self.midi_library_path = path
         self.library_load_dialog = QDialog(parent=self)
         self.library_load_dialog.ui = Ui_LoadingLibrary()
@@ -186,6 +197,8 @@ class ApplicationWindow(QMainWindow):
         self.library_load_dialog.show()
 
     def database_file_selected(self, item):
+        """ Callback after an item in the database list was double clicked.
+        Loads the clicked item into the view"""
         db_item = self.ui.database_item_list_widget.item(item.row()).text()
         mf = self.midi_library.get_midifile(db_item)
         self.ui.currently_playing_label.setText(db_item)
@@ -198,10 +211,12 @@ class ApplicationWindow(QMainWindow):
     # ZOOM CALLBACKS
 
     def zoom_in(self):
+        """ Callback Zoom + Button"""
         self.ui.zoom_slider.setValue(self.ui.zoom_slider.value() + 10)
         self.zoom_slider_changed()
 
     def zoom_out(self):
+        """ Callback Zoom - Button"""
         self.ui.zoom_slider.setValue(self.ui.zoom_slider.value() - 10)
         self.zoom_slider_changed()
 
@@ -213,6 +228,7 @@ class ApplicationWindow(QMainWindow):
 
     @pyqtSlot(int, int)
     def song_position_changed(self, pos, length):
+        """ Callback from player to indicate new position during playback"""
         if self.ui.music_position_slider.maximum() != length:
             self.ui.music_position_slider.setMaximum(length)
         self.ui.music_position_slider.setSliderPosition(pos)
@@ -225,13 +241,17 @@ class ApplicationWindow(QMainWindow):
 
     @pyqtSlot()
     def song_finished(self):
+        """ Callbackb y player to indicate that song has finished"""
         self.set_play_button(False)
         self.ui.music_position_slider.setValue(0)
         self.ui.midiViewer.set_play_style(False)
 
     @pyqtSlot(int)
     def player_response(self, response):
+        """ Communication callback from the player to indicate several
+        new statuses"""
         if response == self.player.player_worker.MSG_RESPONSE_LOADED:
+            # A file was loaded succesfully, load it into view
             queryname = os.path.basename(self.query_path)
             self.ui.currently_playing_label.setText(queryname)
             if queryname.lower().endswith(".mid"):
@@ -241,10 +261,13 @@ class ApplicationWindow(QMainWindow):
             self.search_spinner.stop()
 
         elif response == self.player.player_worker.MSG_RESPONSE_STARTED:
+            # Player started playing
             self.set_play_button(True)
             self.is_playing = True
             self.ui.midiViewer.set_play_style(True)
         else:
+            # MSG_RESPONSE_STOPPED or MSG_RESPONSE_PAUSED
+            # Player paused or stopped
             self.set_play_button(False)
             self.is_playing = False
             if response == self.player.player_worker.MSG_RESPONSE_STOPPED:
@@ -252,10 +275,12 @@ class ApplicationWindow(QMainWindow):
 
     @pyqtSlot(str, str)
     def create_error_dialog(self, title, message):
+        """ Show an error dialog with given title and message"""
         self.search_spinner.stop()
         QMessageBox.information(self, title, message, QMessageBox.Ok)
 
     def update_music_duration_label(self, pos, length):
+        """ Changes the music position/duration label"""
         # Update time label
         if self.is_recording:
             self.ui.song_time_label.setText("{:2d}:{:02d}".format(int(pos/60), int(pos) % 60))
@@ -269,12 +294,14 @@ class ApplicationWindow(QMainWindow):
     # PLAYER CONTROL BUTTON CALLBACKS
 
     def song_position_slider_pressed(self):
+        """ Callback Scrolling in music piece started"""
         self.music_slider_is_pressed = True
         self.ui.midiViewer.set_play_style(True)
         self.continue_after_slider = self.is_playing
         self.player.pause()
 
     def song_position_slider_released(self):
+        """ Callback Scrolling in music piece stopped"""
         self.music_slider_is_pressed = False
         self.player.set_position(self.ui.music_position_slider.value()/1000.)
         if self.continue_after_slider:
@@ -283,21 +310,25 @@ class ApplicationWindow(QMainWindow):
             self.ui.midiViewer.set_play_style(False)
 
     def song_position_slider_moved(self):
+        """ Callback during scrolling in music piece to update the MIDI View"""
         if self.music_slider_is_pressed:
             pos = self.ui.music_position_slider.value()/1000.
             self.ui.midiViewer.position_bar(pos, autoscroll=self.ui.lock_view_button.isChecked())
             self.update_music_duration_label(pos, self.ui.music_position_slider.maximum()/1000.0)
 
     def play_clicked(self):
+        """ Callback play button"""
         self.player.toggle_play_pause()
 
     def set_play_button(self, is_play):
+        """ Change the add button according to play/pause state"""
         if is_play:
             self.ui.play_pause_button.setIcon(self.pauseIcon)
         else:
             self.ui.play_pause_button.setIcon(self.playIcon)
 
     def stop_clicked(self):
+        """ Callback Stop button. Stop recording or music playing"""
         if self.is_recording:
             self.record_timer.stop()
             self.record_stream.stop_stream()
@@ -312,32 +343,36 @@ class ApplicationWindow(QMainWindow):
     # QUERY CONTROL CALLBACKS
 
     def open_query(self):
+        """ Callback open query button to Open Select File Dialog to select and load a query"""
         query_path = str(QFileDialog.getOpenFileName(None, "Select query", self.last_query_path)[0])
         # a file was actually selected
 
         if query_path != '':
-            self.last_query_path = os.path.dirname(self.query_path)
+            self.last_query_path = os.path.dirname(query_path)
             self.load_query(query_path)
 
     def open_temp_folder(self):
+        """ Callback to Open Selct File Dialog set to the tmp directory where previously stored queries are stored"""
         query_path = str(QFileDialog.getOpenFileName(None, "Select query", self.tmp_dir.name)[0])
 
         if query_path != '':
             self.load_query(query_path)
 
     def load_query(self, path):
+        """ Helperfunction to load a selected query"""
         self.query_path = path
-        self.last_query = path
         self.ui.currently_playing_label.setText(self.DEFAULT_PLAYER_TEXT)
         # Just load the file to the player, and let the player decide if its playable
         self.player.load(path)
         self.search_spinner.start()
 
     def reload_last_query(self):
+        """ Callback for reload last query button"""
         if self.last_query != "" and self.query_path != self.last_query:
             self.load_query(self.last_query)
 
     def save_query(self):
+        """ Callback to open Save File Dialog to save currently selected query"""
         if self.query_path != '':
             extension = os.path.splitext(self.query_path)[1]
             store_file_loc = str(QFileDialog.getSaveFileName(None, "Save query", self.last_query_path + "/untitled" + extension, "Audio File (*{})".format(extension))[0])
@@ -345,8 +380,10 @@ class ApplicationWindow(QMainWindow):
             if store_file_loc != '':
                 self.ui.currently_playing_label.setText(self.DEFAULT_PLAYER_TEXT)
 
+                # save last open directory, for reopen
                 self.last_query_path = os.path.dirname(store_file_loc)
                 try:
+                    # create a copy and set current player file to newly stored file
                     shutil.copyfile(self.query_path, store_file_loc)
                     self.query_path = store_file_loc
                     self.player.load(store_file_loc)
@@ -358,13 +395,14 @@ class ApplicationWindow(QMainWindow):
             self.create_error_dialog("Save Query", "Create or open a query first")
 
     def create_new_query(self):
-        # a file was actually selected
+        """ Save a recorded query into the tmp directory after stop was pressed"""
         fnum = 1
         path = self.tmp_query_path.format(fnum)
         while os.path.exists(path):
             fnum += 1
             path = self.tmp_query_path.format(fnum)
 
+        # save
         with wave.open(path, 'w') as wav:
             wav.setnchannels(self.CHANNELS)
             wav.setsampwidth(self.pyaudio.get_sample_size(self.FORMAT))
@@ -374,6 +412,7 @@ class ApplicationWindow(QMainWindow):
             self.load_query(path)
 
     def record_query(self):
+        """ Callback, record button was pressed. Start recording after message box ok"""
         if self.ui.record_query_button.isChecked():
             response = QMessageBox.question(self,
                                             "New recording",
@@ -382,10 +421,12 @@ class ApplicationWindow(QMainWindow):
                                             QMessageBox.Cancel)
 
             if response == QMessageBox.Yes:
+                # Start callback-stream recording
                 self.record_length = 0
                 self.set_view_to_recording(True)
                 self.update_music_duration_label(0, 0)
                 self.recorded_frames.clear()
+                # use settings from MAIN
                 self.record_stream = self.pyaudio.open(format=self.FORMAT,
                                                        channels=self.CHANNELS,
                                                        rate=self.RATE,
@@ -397,6 +438,7 @@ class ApplicationWindow(QMainWindow):
                 self.ui.record_query_button.setChecked(False)
 
     def record_stream_callback(self, in_data, frame_count, time_info, status):
+        """ Callback to get new recorded data"""
         self.recorded_frames.append(in_data)
         if self.is_recording:
             return None, pyaudio.paContinue
@@ -404,6 +446,7 @@ class ApplicationWindow(QMainWindow):
             return None, pyaudio.paComplete
 
     def search_clicked(self):
+        """ Callback to start a search in the database of the currently selected query"""
         if self.midi_library is None:
             QMessageBox.about(self, "Error", "Please select a database first")
             return
@@ -411,13 +454,15 @@ class ApplicationWindow(QMainWindow):
             QMessageBox.about(self, "Error", "Please select a query first")
             return
 
+        self.last_query = self.query_path
         self.library_msg.emit(AsyncLibraryClass.MSG_SEARCH, self.query_path, self.DISPLAY_N_RESULTS)
         self.search_spinner.start()
 
     def search_completed(self, succes, err_msg):
+        """ Callback after search was completed."""
         self.search_spinner.stop()
         if succes:
-            self.ui.result_table.clear()
+            # When successfully searched, load results into the result table
             self.ui.result_table.setRowCount(0)
             for rank, (name, _, (start, end)) in enumerate(self.library_worker.search_result, 1):
                 self.ui.result_table.insertRow(self.ui.result_table.rowCount())
@@ -430,10 +475,13 @@ class ApplicationWindow(QMainWindow):
                 item = QTableWidgetItem(name)
                 item.setTextAlignment(Qt.AlignLeft)
                 self.ui.result_table.setItem(rank - 1, 2, item)
+
+            self.ui.result_table.resizeColumnsToContents()
         else:
             QMessageBox.about(self, "Error", err_msg)
 
     def result_selected(self, item):
+        """ Callback after double click result. Load result of query into view and player"""
         db_item = self.ui.result_table.item(item.row(), 2).text()
         mf = self.midi_library.get_midifile(db_item)
         self.ui.currently_playing_label.setText(db_item)
@@ -442,9 +490,11 @@ class ApplicationWindow(QMainWindow):
         self.query_path = mf.file_path
         self.player.load(mf.file_path)
         self.search_spinner.start()
+        # set the player to the position of the selection start
         self.player.set_position(self.select_notes[0])
 
     def close(self):
+        """ Close all open streams and threads and finally clear tmp directory"""
         if self.record_stream is not None:
             self.record_stream.stop_stream()
             self.record_stream.close()
@@ -457,6 +507,7 @@ class ApplicationWindow(QMainWindow):
         self.tmp_dir.cleanup()
 
     def set_view_to_recording(self, boolean):
+        """ Helpfunction to enable/disable recording view"""
         self.ui.play_pause_button.setDisabled(boolean)
         self.ui.record_query_button.setChecked(boolean)
         self.ui.record_query_button.setDisabled(boolean)
@@ -466,20 +517,21 @@ class ApplicationWindow(QMainWindow):
 
         if boolean:
             self.ui.currently_playing_label.setText("Recording...")
+            self.ui.midiViewer.reset_view()
+            self.player.stop()
         else:
             self.ui.currently_playing_label.setText(self.DEFAULT_PLAYER_TEXT)
 
     def update_record_time(self):
+        """ Callback of Timerthread to update recording time"""
         self.record_length += self.record_timer_interval
         self.update_music_duration_label(self.record_length, 0)
+
 
 def main():
     app = QApplication(sys.argv)
     application = ApplicationWindow()
     application.show()
-    # TODO: Entfernen - fürs debuggen damits schneller geht
-    application._load_library("C:\\Users\\david\\OneDrive\\Dokumente\\Uni\\bacc\\StartUp-Midis\\midi_startup_modified")
-    # application._load_library("small_db")
     exitcode = app.exec_()
     application.close()
     sys.exit(exitcode)

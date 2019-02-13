@@ -1,6 +1,4 @@
-import time
 from midifile import MidiFile
-import wave
 from PyQt5.QtCore import pyqtSignal, QObject, QThread, pyqtSlot
 from PyQt5.QtWidgets import QApplication
 import queue
@@ -10,6 +8,8 @@ import os
 
 
 class AudioPlayer(QObject):
+    """ Class that can handle player features like loading scrolling or playing an audiofile.
+    The Player itself runs in a separate thread, all functions here are just message-forwarders"""
     msg = pyqtSignal(str, str, float)
 
     def __init__(self, tmp_dir):
@@ -42,6 +42,7 @@ class AudioPlayer(QObject):
         self.msg.emit(self.MediaPlayerWorker.MSG_STOP, "", 0.0)
 
     def close(self):
+        """ Shutdown the player e.g. stop thread"""
         self.msg.emit(self.MediaPlayerWorker.MSG_CLOSE, "", 0.0)
         self.thread.quit()
         self.thread.wait()
@@ -50,6 +51,7 @@ class AudioPlayer(QObject):
         self.msg.emit(self.MediaPlayerWorker.MSG_SET_POS, "", new_position)
 
     class MediaPlayerWorker(QObject):
+        """ Player Thread to handle playback of audio files async"""
         song_position_changed = pyqtSignal(int, int)
         song_finished = pyqtSignal()
         error_occured = pyqtSignal(str, str)
@@ -101,6 +103,7 @@ class AudioPlayer(QObject):
 
         @pyqtSlot()
         def run(self):
+            """ Main thread function to handle massages passed to it"""
             global reset, path, pos
 
             # since run() is executed in another thread
@@ -145,6 +148,7 @@ class AudioPlayer(QObject):
                 elif msg == self.MSG_CLOSE:
                     self.exiting = True
 
+                # send updates on playback position of the player if it is playing
                 if self.is_playing:
                     if self.slider_delay_update > 0:
                         self.slider_delay_update -= 1
@@ -152,6 +156,7 @@ class AudioPlayer(QObject):
                         new_pos, length = self.get_position()
                         new_pos = int(new_pos*1000)
                         if self.last_pos != new_pos:
+                            # a negative value means playback has stopped (end reached)
                             if self.mixer.music.get_pos() < 0:
                                 self.is_playing = False
                                 if self.file_type == self.MIDI:
@@ -170,14 +175,17 @@ class AudioPlayer(QObject):
             self.close()
 
         def get_msg(self, msg, path, pos):
+            """ Callback to receive new messaged"""
             self.messages.put((msg, path, pos))
 
         def load(self, path):
+            """ Loads afile"""
             self.original_file_path = path
             self.start_pos = 0
-
+            self.pause_mark = 0
             self.mixer.music.stop()
 
+            # Midifile has to be handled separately
             if str(path).lower().endswith(self.MIDI):
                 self.file_type = self.MIDI
                 self.file_len = MidiFile("", path).get_length()
@@ -188,19 +196,24 @@ class AudioPlayer(QObject):
                 except:
                     pass
 
+                # For all other filetypes convert the input to MP3, since the player
+                # is only capable of scrolling in MP3 Files
                 self.file_type = self.OTHER
                 self.file_len = self.convert_input_to_mp3(path, self.tmp_file_mp3)
-                path = self.tmp_file_mp3
+                path = self.tmp_file_mp3  # force path to converted mp3 file
 
             try:
                 self.mixer.music.load(path)
                 if self.file_type != self.MIDI:
+                    # The player cannot pause midi playback,
+                    # on the otherhand, scrolling needs pause mode in MP3
                     self.mixer.music.play()
                     self.mixer.music.pause()
 
                 self.file_loaded = True
             except Exception as e:
                 print(e)
+                # indicate error during loading
                 self.error_occured.emit(self.ERROR_TITLE, str(e))
                 self.file_len = 0.
                 self.file_loaded = False
@@ -219,8 +232,11 @@ class AudioPlayer(QObject):
             return self.is_playing
 
         def play(self):
+            """ start playing again"""
             if self.file_loaded:
                 if self.file_type == self.MIDI:
+                    # MIDI needs to reload a pausemark, since
+                    # only stop can stop playing (no pause)
                     self.set_position(self.pause_mark)
                     self.mixer.music.play()
                 else:
@@ -228,8 +244,10 @@ class AudioPlayer(QObject):
                 self.is_playing = True
 
         def pause(self):
+            """ Pause playback"""
             if self.file_loaded:
                 if self.file_type == self.MIDI:
+                    # Midi file needs to be stopped, store last position
                     self.pause_mark, _ = self.get_position()
                     self.mixer.music.stop()
                 else:
@@ -239,6 +257,7 @@ class AudioPlayer(QObject):
                 self.is_playing = False
 
         def stop(self):
+            """ Stop playback"""
             if self.file_type == self.OTHER:
                 self.pause()
                 self.mixer.music.rewind()
@@ -255,6 +274,9 @@ class AudioPlayer(QObject):
 
             try:
                 if self.file_type == self.MIDI:
+                    # The player cannot set the position for MIDI-Files
+                    # So create a new midi-file and truncate all notes before
+                    # new_pos
                     mf = MidiFile(self.TMP_MID, self.original_file_path)
                     if new_position > 0:
                         new_position += mf.truncate_ticks(new_position, -1)
@@ -272,6 +294,8 @@ class AudioPlayer(QObject):
             #     self.mixer.music.play()
             #     self.mixer.music.pause()
 
+            # The player is only showing OVERALL play time, not position dependent,
+            # so store real position by offsets
             if self.file_type == self.OTHER:
                 self.start_pos = new_position - self.mixer.music.get_pos() / 1000.0
             else:
@@ -293,6 +317,7 @@ class AudioPlayer(QObject):
                 self.is_closed = True
 
         def convert_input_to_mp3(self, input, output=None):
+            """ Converts an input file to MP§ using FFmpeg"""
             try:
                 if output is None:
                     output = input + "_converted.mp3"
@@ -302,7 +327,9 @@ class AudioPlayer(QObject):
                            .output(output)
                            .overwrite_output()
                            .run_async(quiet=True))
+
                 out, err = process.communicate()
+                # the duration of the file is in text form in err
                 result = re.search('Duration: (.*),', str(err))
                 time = sum(x * float(t) for x, t in zip([3600, 60, 1], result.group(1).split(',')[0].split(":")))
                 return time

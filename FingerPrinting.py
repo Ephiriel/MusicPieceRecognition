@@ -1,8 +1,9 @@
+from typing import Any, Tuple
+
 from AbstractMatchAlgorithm import AbstractMatchClass
 from midilibrary import MidiLibrary
 from midifile import MidiFile
 import numpy as np
-import matplotlib.pyplot as plt
 import collections
 
 
@@ -23,6 +24,10 @@ class FingerPrinting(AbstractMatchClass):
     TDR_WINDOW = "tdr_window"
     TDR_MASK = "tdr_tdr_mask"
 
+    SPLIT_QUERIES_LONGER_THAN = "long_query_split"
+    SPLIT_QUERY_LENGTH = "split_query_length"
+    SPLIT_QUERIES_SLIDING_WINDOW = "query_split_sliding_window"
+
     PLOT_COMPARISON = "plot_comparison"
 
     # Default parameters for Fingerprint Creation
@@ -42,6 +47,9 @@ class FingerPrinting(AbstractMatchClass):
     DEFAULT_TDR_MASK = 0x0000001F
     DEFAULT_USE_VERIFICATION = False
     DEFAULT_PLOT_COMPARISON = False
+    DEFAULT_SPLIT_QUERIES_LONGER_THAN = 25
+    DEFAULT_SPLIT_QUERY_LENGTH = 25
+    DEFAULT_SPLIT_QUERIES_SLIDING_WINDOW = 5
 
     PARAM_SETTING_1 = {
         N_OF_NOTES: 3,
@@ -55,7 +63,10 @@ class FingerPrinting(AbstractMatchClass):
         TDR_MASK: 0x1FF,
         TDR_RANGE: 16.0,
         USE_VERIFICATION: False,
-        ELIMINATE_TOP_PERCENTILE: None
+        ELIMINATE_TOP_PERCENTILE: None,
+        SPLIT_QUERIES_LONGER_THAN: 25,
+        SPLIT_QUERIES_SLIDING_WINDOW: 5,
+        SPLIT_QUERY_LENGTH: 25
     }
 
     PARAM_SETTING_2 = {
@@ -70,7 +81,10 @@ class FingerPrinting(AbstractMatchClass):
         TDR_MASK: 0x1FF,
         TDR_RANGE: 16.0,
         USE_VERIFICATION: True,
-        ELIMINATE_TOP_PERCENTILE: None
+        ELIMINATE_TOP_PERCENTILE: None,
+        SPLIT_QUERIES_LONGER_THAN: 20,
+        SPLIT_QUERIES_SLIDING_WINDOW: 5,
+        SPLIT_QUERY_LENGTH: 20
     }
 
     PARAM_SETTING_3 = {
@@ -85,7 +99,10 @@ class FingerPrinting(AbstractMatchClass):
         TDR_MASK: 0x1F,
         TDR_RANGE: 8.0,
         USE_VERIFICATION: False,
-        ELIMINATE_TOP_PERCENTILE: 99
+        ELIMINATE_TOP_PERCENTILE: 99,
+        SPLIT_QUERIES_LONGER_THAN: 20,
+        SPLIT_QUERIES_SLIDING_WINDOW: 5,
+        SPLIT_QUERY_LENGTH: 20
     }
 
     class FingerPrintList(list):
@@ -94,8 +111,9 @@ class FingerPrinting(AbstractMatchClass):
         of the fingerprint-algorithm, when a matched fingerprint-pair is appended
         or removed.
         """
+        max_score: Tuple[Any, Any]
 
-        def __init__(self, db_name, query_fingerprints, query_notes, query_name, **kwargs):
+        def __init__(self, db_name, query_fingerprints, query_notes, query_name, ignore_doubles=True, **kwargs):
             """
             Initialize function
             :param midifile: The midifile in the database
@@ -110,6 +128,8 @@ class FingerPrinting(AbstractMatchClass):
             self.histogram = collections.Counter()
             self.fps_in_bins = dict()
             self.max_score = None
+            self.ignore_double_set = set()
+            self.ignore_doubles = ignore_doubles
 
         def append(self, matched_pair):
             """
@@ -117,6 +137,13 @@ class FingerPrinting(AbstractMatchClass):
             :param matched_pair: tuple of 2: first item is the database-fingerprint second item is the query-fingerprint
             :return: None
             """
+
+            # For sequenced parameters ignore already added fingerprints, since they can be doubled due to overlapping window
+            if self.ignore_doubles and (matched_pair[0].hash, matched_pair[0].pos1) in self.ignore_double_set:
+                return
+
+            self.ignore_double_set.add((matched_pair[0].hash, matched_pair[0].pos1))
+
             super().append(matched_pair)
 
             mfp, qfp = matched_pair
@@ -142,6 +169,8 @@ class FingerPrinting(AbstractMatchClass):
         def remove(self, matched_pair):
             super().remove(matched_pair)
 
+            self.ignore_double_set.discard((matched_pair[0].hash, matched_pair[0].pos1))
+
             mfp, qfp = matched_pair
 
             # calculate the speed ratio
@@ -156,19 +185,25 @@ class FingerPrinting(AbstractMatchClass):
             if old_score == self.max_score[1]:
                 self.max_score = None  # clear max_score, so it has to be recalculated
 
-        def get_score(self):
+        def get_score(self, use_neighbors=False, filter=0):
             """
             Returns the highest diagonal score of the histogram
             :return: Highest score
             """
-            if self.max_score is None:
+            if self.max_score is None or use_neighbors:
                 highest_score = self.histogram.most_common(1)
                 if len(highest_score) > 0:
                     self.max_score = highest_score[0]
-                    return self.max_score
                 else:
                     return (-1, -1)
-            else:
+
+                if use_neighbors:
+                    # Get the bin of the neighbor and add the score of other bins to it
+                    # but reduce score by the squared distance to the largest bin.
+                    scores = np.array(self.histogram.most_common())
+                    # filter scores above mean() * filter-value
+                    filtered_scores = scores[scores[:, 1] > scores[:, 1].mean()*filter]
+                    self.max_score = (self.max_score[0], (filtered_scores[:, 1]/(np.square(self.max_score[0] - filtered_scores[:, 0]) + 1)).sum())
                 return self.max_score
 
         def __str__(self):
@@ -197,6 +232,11 @@ class FingerPrinting(AbstractMatchClass):
         self.verification_time_window = kwargs.get(self.VERIFICATION_TIME_WINDOW, self.DEFAULT_VERIFICATION_TIME_WINDOW)
         self.use_verification = kwargs.get(self.USE_VERIFICATION, self.DEFAULT_USE_VERIFICATION)
         self.percentile = kwargs.get(self.ELIMINATE_TOP_PERCENTILE, None)
+        self.split_queries_longer_than = kwargs.get(self.SPLIT_QUERIES_LONGER_THAN,
+                                                    self.DEFAULT_SPLIT_QUERIES_LONGER_THAN)
+        self.split_query_length = kwargs.get(self.SPLIT_QUERY_LENGTH, self.DEFAULT_SPLIT_QUERIES_LONGER_THAN)
+        self.split_queries_sliding_window = kwargs.get(self.SPLIT_QUERIES_SLIDING_WINDOW,
+                                                       self.DEFAULT_SPLIT_QUERIES_SLIDING_WINDOW)
 
         # Set settings for the FingerPrint Class
         self.FingerPrint.update_class_variables(kwargs.get(self.TDR_HASH_TYPE, self.DEFAULT_HASH),
@@ -313,32 +353,54 @@ class FingerPrinting(AbstractMatchClass):
         return "FingerPrinting"
 
     def search(self, query, query_name="", evaluate=True, get_top_x=1):
-        qname = ""
+        """ Start a search in the library"""
         if isinstance(query, MidiFile):
-            qname = query.name
+            query_name = query.name
             query_notes = np.array(query.notes[0])
         else:
             query_notes = query
 
         dict_result = dict()
 
-        q_fingerprints, matches, should_match = self.perform_query(query_notes, qname)
+        # create splitable windows, if split_queries_longer_than is none or < 0, don't split
+        no_split = self.split_queries_longer_than is None or self.split_queries_longer_than < 0 or self.split_query_length >= query_notes.shape[0]
+        if no_split:
+            split_indexes = (0, )
+        else:
+            split_indexes = range(0, query_notes.shape[0] - self.split_query_length + 1, self.split_queries_sliding_window)
 
-        # sort descending by max score
-        results = sorted(matches, key=lambda itm: itm.get_score()[1], reverse=True)
+        matchdict = dict()
 
+        for split_idx in split_indexes:
+            if no_split or split_idx + self.split_query_length > query_notes.shape[0] - self.split_queries_sliding_window:
+                split_end = query_notes.shape[0]
+            else:
+                split_end = split_idx + self.split_query_length
+
+            # perform a query for every split and save all results in matchdict,
+            split_query = query_notes[split_idx:split_end]
+            self.perform_query(split_query, query_name, pre_matched=matchdict)
+
+        results = list(matchdict.values())
         # make token verification on top 5%
         if self.use_verification:
             results = self._verify_results(results)
 
+        # Filter for splitted queries all bins > 1.25, for others use 1
+        if self.split_queries_longer_than is not None and self.split_queries_longer_than > 0:
+            filter = 1.25
+        else:
+            filter = 1
+
+        # sort after score, including partially used neighbors
+        results = sorted(results, key=lambda itm: itm.get_score(use_neighbors=True, filter=filter)[1], reverse=True)
+
         for i, match in enumerate(results, 1):
-            pos, score = match.get_score()
-            matched_fp = match.fps_in_bins.get(pos, [])
-            from_pos = min(matched_fp, key=lambda fp: fp.pos1, default=None)
-            to_pos = max(matched_fp, key=lambda fp: fp.max_pos, default=None)
-            start = from_pos.pos1 if from_pos is not None else -1
-            stop = to_pos.max_pos if to_pos is not None else -1
-            dict_result[match.db_name] = (score, i, (start, stop))
+            pos, score = match.get_score(use_neighbors=True, filter=filter)
+            matched_fp = match.fps_in_bins[pos]
+            from_pos = min(matched_fp, key=lambda fp: fp.pos1)
+            to_pos = max(matched_fp, key=lambda fp: fp.max_pos)
+            dict_result[match.db_name] = (score, i, (from_pos.pos1, to_pos.max_pos))
 
         if evaluate:
             return dict_result
@@ -425,7 +487,7 @@ class FingerPrinting(AbstractMatchClass):
             lens[idx] = len(self._fingerprints[key])
         return lens
 
-    def perform_query(self, query_notes, query_name):
+    def perform_query(self, query_notes, query_name, pre_matched=None):
         """
         Search for the query by creating fingerprints of it
         and then, for each fingerprint ask for a dictionary entry.
@@ -434,7 +496,7 @@ class FingerPrinting(AbstractMatchClass):
         :return: the created fingerprints, a list of matched fingerprints and the "true" match for analysis
         """
         query_fingerprints = self.create_fingerprints(query_notes, query_name, remove_doubles=True)
-        matched_queries = dict()
+        matched_queries = pre_matched if not None else dict()
         for fp in query_fingerprints:
             for hash_val in fp.get_hash_iterator():
                 matched_fingerprint_list = self._fingerprints.get(hash_val, None)
@@ -445,7 +507,9 @@ class FingerPrinting(AbstractMatchClass):
                             # create a new fingerprintlist, if there is a fingerprint from a new file
                             if matches is None:
                                 matches = self.FingerPrintList(mfp.name, query_fingerprints,
-                                                               query_notes, query_name)
+                                                               query_notes, query_name,
+                                                               ignore_doubles=self.split_queries_longer_than is not None
+                                                                              and self.split_queries_longer_than > 0)
                                 matched_queries[mfp.name] = matches
 
                             matches.append((mfp, fp))

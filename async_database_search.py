@@ -9,8 +9,16 @@ from midifile import MidiFile
 
 
 class AsyncLibraryClass(QObject):
+    """ This class runs in an async thread load and perform
+    queries on a database."""
+
+    # ListenerList for progress of loading the library
     progress_changed = pyqtSignal(int, str)
+
+    # ListenerList for finished of loading the library
     finished = pyqtSignal()
+
+    # ListenerList for search complete indicating
     search_complete = pyqtSignal(bool, str)
 
     MSG_LOAD_LIBRARY = "load_lib"
@@ -30,12 +38,15 @@ class AsyncLibraryClass(QObject):
 
     @pyqtSlot()
     def run(self):
+        """ Main threadloop, handle messages to perform tasks"""
         global msg, str_param, int_param
         while not self.exiting:
             try:
                 msg, str_param, int_param = self.messages.get(block=True, timeout=0.1)
             except queue.Empty:
                 msg = ""
+
+            # Let other tasks do something as well
             QApplication.instance().processEvents()
             if msg == self.MSG_LOAD_LIBRARY:
                 self.create_library(str_param)
@@ -45,12 +56,14 @@ class AsyncLibraryClass(QObject):
                 self.exiting = True
 
     def create_library(self, path):
+        """ Create a new library"""
         self.midi_library = MidiLibrary(path, self.library_update_progress)
         self.search_algorithm = FingerPrinting(self.midi_library, self.library_update_progress,
                                                **self.params)
         self.finished.emit()
 
     def search(self, path: str, n_of_results):
+        """ Perform search query"""
         try:
             filename = os.path.basename(path)
             if path.lower().endswith(".mid"):
@@ -67,6 +80,7 @@ class AsyncLibraryClass(QObject):
             self.search_complete.emit(False, str(e))
 
     def library_update_progress(self, called_from, act, max, name):
+        """ Inform listeners about loading library progress"""
         if called_from == "lib":
             progress = int(act / max * 100 * 0.15)
             progress_text = "Loading file {}/{}...".format(act, max)

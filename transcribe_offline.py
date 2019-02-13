@@ -32,6 +32,9 @@ class Transcriptor:
         self.peak_picker = NotePeakPickingProcessor(**vars(self.args))
 
     def process_file(self, input):
+        """ Transform input to a note and duration list.
+        The output is transformed to a 4 column table to be compatible
+        with MIDI-File output."""
         activations = self.rnn_processor.process(input)
         notes = self.peak_picker(activations)
         # Bring notes in compatible form
