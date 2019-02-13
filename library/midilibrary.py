@@ -1,4 +1,4 @@
-from midifile import MidiFile
+from library.midifile import MidiFile
 import os
 import numpy as np
 import copy

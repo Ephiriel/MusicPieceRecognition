@@ -1,4 +1,4 @@
-from midifile import MidiFile
+from library.midifile import MidiFile
 from PyQt5.QtCore import pyqtSignal, QObject, QThread, pyqtSlot
 from PyQt5.QtWidgets import QApplication
 import queue

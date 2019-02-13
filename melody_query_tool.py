@@ -1,20 +1,21 @@
-from FingerPrinting import FingerPrinting
-from gui import Ui_MainWindow
-from loadLibrary import Ui_LoadingLibrary
+from search_algorithms.fingerprinting import FingerPrinting
+from gui.gui import Ui_MainWindow
+from gui.loadLibrary import Ui_LoadingLibrary
 from PyQt5.QtWidgets import QFileDialog, QMainWindow, QApplication, QMessageBox, QDialog, QTableWidgetItem
 from PyQt5.QtGui import QPixmap, QIcon
 from PyQt5.QtCore import pyqtSignal, QThread, pyqtSlot, QTimer, Qt
 import sys
-from player import AudioPlayer
+from mediaplayer.player import AudioPlayer
 import os
 import tempfile
 import shutil
 import pyaudio
 import wave
-from async_database_search import AsyncLibraryClass
-from QtWaitingSpinner import QtWaitingSpinner
+from library.async_database_search import AsyncLibraryClass
+from gui.QtWaitingSpinner import QtWaitingSpinner
 
 ###
+# use this commands to update the user interface files (Qt Designer)
 # python -m PyQt5.uic.pyuic -x GUI.ui -o gui.py
 # python -m PyQt5.uic.pyuic -x LoadingLibrary.ui -o loadLibrary.py
 ###
@@ -73,7 +74,7 @@ class ApplicationWindow(QMainWindow):
         self.lib_path = "."
 
         self.pauseIcon = QIcon()
-        self.pauseIcon.addPixmap(QPixmap("icons/pause.png"), QIcon.Normal, QIcon.Off)
+        self.pauseIcon.addPixmap(QPixmap("gui/icons/pause.png"), QIcon.Normal, QIcon.Off)
         self.playIcon = self.ui.play_pause_button.icon()
 
         self.continue_after_slider = False
@@ -517,7 +518,6 @@ class ApplicationWindow(QMainWindow):
 
         if boolean:
             self.ui.currently_playing_label.setText("Recording...")
-            self.ui.midiViewer.reset_view()
             self.player.stop()
         else:
             self.ui.currently_playing_label.setText(self.DEFAULT_PLAYER_TEXT)

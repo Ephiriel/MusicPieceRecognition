@@ -4,7 +4,7 @@ Taken from https://github.com/rhetr/seq-gui
 and adopted to the needs of this project
 """
 from PyQt5 import QtGui, QtCore, QtWidgets
-from midifile import MidiFile
+from library.midifile import MidiFile
 import numpy as np
 import os
 

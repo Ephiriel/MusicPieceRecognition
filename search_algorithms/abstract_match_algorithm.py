@@ -1,8 +1,7 @@
 from abc import ABC, abstractmethod
-from midilibrary import MidiLibrary
-from midifile import MidiFile
+from library.midilibrary import MidiLibrary
 import numpy as np
-from timemeasure import MeasureTime
+from search_algorithms.timemeasure import MeasureTime
 
 
 class AbstractMatchClass(ABC):

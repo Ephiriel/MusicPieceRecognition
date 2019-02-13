@@ -1,8 +1,8 @@
 from typing import Any, Tuple
 
-from AbstractMatchAlgorithm import AbstractMatchClass
-from midilibrary import MidiLibrary
-from midifile import MidiFile
+from search_algorithms.abstract_match_algorithm import AbstractMatchClass
+from library.midilibrary import MidiLibrary
+from library.midifile import MidiFile
 import numpy as np
 import collections
 

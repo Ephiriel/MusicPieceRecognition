@@ -1,11 +1,11 @@
-from midilibrary import MidiLibrary
-from FingerPrinting import FingerPrinting
+from library.midilibrary import MidiLibrary
+from search_algorithms.fingerprinting import FingerPrinting
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import pyqtSignal, QObject, pyqtSlot
 import os
 import queue
-from transcribe_offline import Transcriptor
-from midifile import MidiFile
+from search_algorithms.transcribe_offline import Transcriptor
+from library.midifile import MidiFile
 
 
 class AsyncLibraryClass(QObject):
