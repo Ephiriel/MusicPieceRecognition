@@ -29,6 +29,11 @@ class MidiFile:
         self.bps = 120/60  # Get a default value, in case the midi Event is missing
 
         self.notes = self.get_notes()
+
+        if len(self.notes[0]) == 0:
+            raise Exception("File {} does not contain MIDI-Notes in track 0. "
+                            "Only events in track 0 are used.".format(name))
+
         self.rel_notelist = None
         self.rel_poslist = None
         self.rel_durlist = None

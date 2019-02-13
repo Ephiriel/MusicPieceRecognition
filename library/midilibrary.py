@@ -196,24 +196,24 @@ class MidiLibrary:
                 if notify_init_status is not None:
                     notify_init_status("lib", idx, max_files, file)
                 if os.path.isdir(path + "/" + file):
-                    self._load_recursive(path + "/" + file, file)
+                    self._load_recursive(path + "/" + file, file, notify_init_status)
                 if file.endswith(".mid"):
-                    self._add_file_to_library(path + "/" + file, file)
+                    self._add_file_to_library(path + "/" + file, file, notify_init_status)
         elif os.path.isfile(path):
-            self._add_file_to_library(path)
+            self._add_file_to_library(path, notify_init_status)
 
         if notify_init_status is not None:
             notify_init_status("lib", max_files, max_files, "")
 
         return True
 
-    def _load_recursive(self, path, name_prefix):
+    def _load_recursive(self, path, name_prefix, notify_init_status=None):
         # load all midi files in this dir
         for file in os.listdir(path):
             if os.path.isdir(path + "/" + file):
-                self._load_recursive(path + "/" + file, name_prefix + "/" + file)
+                self._load_recursive(path + "/" + file, name_prefix + "/" + file, notify_init_status)
             if file.endswith(".mid"):
-                self._add_file_to_library(path + "/" + file, name_prefix + "/" + file)
+                self._add_file_to_library(path + "/" + file, name_prefix + "/" + file, notify_init_status)
 
     def get_midifiles(self, idx=None, get_copy=False):
         """Returns a numpy-array of midifiles, selected by idx, or all of them if no indices are provided.
@@ -241,7 +241,7 @@ class MidiLibrary:
         except KeyError:
             return None
 
-    def _add_file_to_library(self, path, filename=None):
+    def _add_file_to_library(self, path, filename=None, notify_init_status=None):
         """Adds a file to the library. Qualifies by path, if
         entry with same name is already inside.
         :param path: path to midi-file or a folder containing midifiles.
@@ -259,7 +259,7 @@ class MidiLibrary:
             mf = MidiFile(filename, path)
             self._database[filename] = mf
         except:
-            pass
+            notify_init_status("excpetion", -1, -1, "{} containts too few notes".format(filename))
 
     def get_length(self):
         """returns the amount of midifiles stored in the database"""

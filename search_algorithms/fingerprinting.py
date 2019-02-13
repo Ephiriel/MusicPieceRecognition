@@ -255,15 +255,18 @@ class FingerPrinting(AbstractMatchClass):
                 notify_init_status("fp", current, max_midi, midifile.name)
 
             if isinstance(midifile, MidiFile):
-                for fp in self.create_fingerprints(np.array(midifile.notes[0]), midifile.name):
-                    fplist = self._fingerprints.get(fp.hash, None)
-                    # check if hash is already in the list
-                    if fplist is None:
-                        # create new list
-                        self._fingerprints[fp.hash] = [fp]
-                    else:
-                        # otherwise append fingerprint to existing list
-                        fplist.append(fp)
+                try:
+                    for fp in self.create_fingerprints(np.array(midifile.notes[0]), midifile.name):
+                        fplist = self._fingerprints.get(fp.hash, None)
+                        # check if hash is already in the list
+                        if fplist is None:
+                            # create new list
+                            self._fingerprints[fp.hash] = [fp]
+                        else:
+                            # otherwise append fingerprint to existing list
+                            fplist.append(fp)
+                except:
+                    notify_init_status("excpetion", -1, -1, "{} containts too few notes".format(midifile.name))
 
         if self.percentile is not None:
             lens = np.zeros(len(self._fingerprints))

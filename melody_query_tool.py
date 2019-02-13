@@ -93,6 +93,7 @@ class ApplicationWindow(QMainWindow):
         self.library_worker.progress_changed.connect(self.update_load_progress)
         self.library_worker.finished.connect(self.library_load_finished)
         self.library_worker.search_complete.connect(self.search_completed)
+        self.library_worker.error_occured.connect(self.library_loading_error)
 
         self.search_spinner = QtWaitingSpinner(self)
 
@@ -192,10 +193,14 @@ class ApplicationWindow(QMainWindow):
         self.library_load_dialog = QDialog(parent=self)
         self.library_load_dialog.ui = Ui_LoadingLibrary()
         self.library_load_dialog.ui.setupUi(self.library_load_dialog)
+        self.library_load_dialog.ui.load_error_list.clear()
 
         self.library_msg.emit(AsyncLibraryClass.MSG_LOAD_LIBRARY, path, 0)
 
         self.library_load_dialog.show()
+
+    def library_loading_error(self, exception, text):
+        self.library_load_dialog.ui.load_error_list.addItem(text)
 
     def database_file_selected(self, item):
         """ Callback after an item in the database list was double clicked.

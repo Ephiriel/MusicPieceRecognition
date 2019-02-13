@@ -37,6 +37,8 @@ class Transcriptor:
         with MIDI-File output."""
         activations = self.rnn_processor.process(input)
         notes = self.peak_picker(activations)
+        if notes.shape[0] < 3:
+            raise Exception("Not enough notes in query detected")
         # Bring notes in compatible form
         retval = np.zeros((notes.shape[0], 4))
         retval[:, 0] = notes[:, 1]

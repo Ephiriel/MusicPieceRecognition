@@ -416,7 +416,12 @@ class PianoWidget(QtWidgets.QWidget):
         """
         if isinstance(mf, str):
             queryname = os.path.basename(mf)
-            self.midifile = MidiFile(queryname, mf)
+            try:
+                self.midifile = MidiFile(queryname, mf)
+            except Exception:
+                self.reset_view()
+                return
+
         elif isinstance(mf, MidiFile):
             self.midifile = mf
         else:

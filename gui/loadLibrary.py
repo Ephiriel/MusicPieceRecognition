@@ -27,6 +27,12 @@ class Ui_LoadingLibrary(object):
         self.library_loading_task_label = QtWidgets.QLabel(LoadingLibrary)
         self.library_loading_task_label.setObjectName("library_loading_task_label")
         self.verticalLayout.addWidget(self.library_loading_task_label)
+        self.load_error_list = QtWidgets.QListWidget(LoadingLibrary)
+        self.load_error_list.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        self.load_error_list.setSelectionMode(QtWidgets.QAbstractItemView.NoSelection)
+        self.load_error_list.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectColumns)
+        self.load_error_list.setObjectName("load_error_list")
+        self.verticalLayout.addWidget(self.load_error_list)
 
         self.retranslateUi(LoadingLibrary)
         QtCore.QMetaObject.connectSlotsByName(LoadingLibrary)

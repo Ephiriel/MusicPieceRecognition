@@ -21,6 +21,8 @@ class AsyncLibraryClass(QObject):
     # ListenerList for search complete indicating
     search_complete = pyqtSignal(bool, str)
 
+    error_occured = pyqtSignal(str, str)
+
     MSG_LOAD_LIBRARY = "load_lib"
     MSG_SEARCH = "search"
     MSG_EXIT = "exit"
@@ -84,9 +86,12 @@ class AsyncLibraryClass(QObject):
         if called_from == "lib":
             progress = int(act / max * 100 * 0.15)
             progress_text = "Loading file {}/{}...".format(act, max)
-        else:
+        elif called_from == "fp":
             progress = int(15 + act / max * 100 * 0.85)
             progress_text = "Creating fingerprints {}/{}...".format(act, max)
+        else:
+            self.error_occured.emit(called_from, name)
+            return
 
         self.progress_changed.emit(progress, progress_text)
 

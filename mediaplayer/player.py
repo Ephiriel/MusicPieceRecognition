@@ -186,23 +186,23 @@ class AudioPlayer(QObject):
             self.mixer.music.stop()
 
             # Midifile has to be handled separately
-            if str(path).lower().endswith(self.MIDI):
-                self.file_type = self.MIDI
-                self.file_len = MidiFile("", path).get_length()
-            else:
-                try:
-                    # load default file, otherwise the tmp file cannot be overridden
-                    self.mixer.music.load(path)
-                except:
-                    pass
-
-                # For all other filetypes convert the input to MP3, since the player
-                # is only capable of scrolling in MP3 Files
-                self.file_type = self.OTHER
-                self.file_len = self.convert_input_to_mp3(path, self.tmp_file_mp3)
-                path = self.tmp_file_mp3  # force path to converted mp3 file
-
             try:
+                if str(path).lower().endswith(self.MIDI):
+                    self.file_type = self.MIDI
+                    self.file_len = MidiFile(os.path.basename(path), path).get_length()
+                else:
+                    try:
+                        # load default file, otherwise the tmp file cannot be overridden
+                        self.mixer.music.load(path)
+                    except:
+                        pass
+
+                    # For all other filetypes convert the input to MP3, since the player
+                    # is only capable of scrolling in MP3 Files
+                    self.file_type = self.OTHER
+                    self.file_len = self.convert_input_to_mp3(path, self.tmp_file_mp3)
+                    path = self.tmp_file_mp3  # force path to converted mp3 file
+
                 self.mixer.music.load(path)
                 if self.file_type != self.MIDI:
                     # The player cannot pause midi playback,
