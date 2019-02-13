@@ -12,7 +12,7 @@ DTW using https://librosa.github.io/librosa/generated/librosa.core.dtw.html
 Symbolic Fingerprinting after Arzt et al. (http://www.cp.jku.at/research/papers/Arzt_etal_ISMIR_2012.pdf and http://www.cp.jku.at/research/papers/Arzt_etal_ISMIR_2014.pdf)
 
 # Used external files:
-https://github.com/rhetr/seq-gui for basis of the GUI
+https://github.com/rhetr/seq-gui for MIDI-Viewer (piano-roll)
 
 https://github.com/snowwlex/QtWaitingSpinner as beautiful waiting animation
 
