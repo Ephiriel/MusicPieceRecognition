@@ -36,7 +36,7 @@ class ApplicationWindow(QMainWindow):
         FingerPrinting.TDR_RANGE: 8.0,
         FingerPrinting.USE_VERIFICATION: False,
         FingerPrinting.ELIMINATE_TOP_PERCENTILE: 99,
-        FingerPrinting.SPLIT_QUERIES_LONGER_THAN: 20,
+        FingerPrinting.SPLIT_QUERIES_LONGER_THAN: None,
         FingerPrinting.SPLIT_QUERIES_SLIDING_WINDOW: 5,
         FingerPrinting.SPLIT_QUERY_LENGTH: 20
     }
@@ -159,10 +159,13 @@ class ApplicationWindow(QMainWindow):
         # a path was actually selected
         if midi_library_path != '':
             if clear:
-                self.ui.database_item_list_widget.clear()
                 self.ui.result_table.setRowCount(0)
                 self.player.stop()
                 self.ui.midiViewer.reset_view()
+                self.library_worker.midi_library = None
+                self.library_worker.search_algorithm = None
+                self.midi_library = None
+                self.search_algorithm = None
             else:
                 self.player.pause()
 
@@ -184,8 +187,10 @@ class ApplicationWindow(QMainWindow):
         """ Callback when library loading has finished"""
         self.midi_library = self.library_worker.midi_library
         self.search_algorithm = self.library_worker.search_algorithm
+        self.ui.database_item_list_widget.clear()
         self.ui.database_item_list_widget.addItems(self.midi_library.get_midifile_names())
         self.library_load_dialog.accept()
+        self.library_load_dialog.deleteLater()
 
     def _load_library(self, path):
         """ Helper function to start library add"""
@@ -470,17 +475,23 @@ class ApplicationWindow(QMainWindow):
         if succes:
             # When successfully searched, load results into the result table
             self.ui.result_table.setRowCount(0)
-            for rank, (name, _, (start, end)) in enumerate(self.library_worker.search_result, 1):
+            for rank, (name, (score, perc_score), (start, end)) in enumerate(self.library_worker.search_result, 1):
                 self.ui.result_table.insertRow(self.ui.result_table.rowCount())
                 item = QTableWidgetItem(str(rank))
                 item.setTextAlignment(Qt.AlignHCenter)
                 self.ui.result_table.setItem(rank - 1, 0, item)
+                item = QTableWidgetItem("{:.1f}".format(score))
+                item.setTextAlignment(Qt.AlignHCenter)
+                self.ui.result_table.setItem(rank - 1, 1, item)
+                item = QTableWidgetItem("{:.2f}".format(perc_score))
+                item.setTextAlignment(Qt.AlignHCenter)
+                self.ui.result_table.setItem(rank - 1, 2, item)
                 item = QTableWidgetItem("{:.1f}".format(start))
                 item.setTextAlignment(Qt.AlignRight)
-                self.ui.result_table.setItem(rank - 1, 1, item)
+                self.ui.result_table.setItem(rank - 1, 3, item)
                 item = QTableWidgetItem(name)
                 item.setTextAlignment(Qt.AlignLeft)
-                self.ui.result_table.setItem(rank - 1, 2, item)
+                self.ui.result_table.setItem(rank - 1, 4, item)
 
             self.ui.result_table.resizeColumnsToContents()
         else:
@@ -488,7 +499,7 @@ class ApplicationWindow(QMainWindow):
 
     def result_selected(self, item):
         """ Callback after double click result. Load result of query into view and player"""
-        db_item = self.ui.result_table.item(item.row(), 2).text()
+        db_item = self.ui.result_table.item(item.row(), 4).text()
         mf = self.midi_library.get_midifile(db_item)
         self.ui.currently_playing_label.setText(db_item)
 

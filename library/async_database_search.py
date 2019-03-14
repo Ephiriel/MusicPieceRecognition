@@ -59,9 +59,14 @@ class AsyncLibraryClass(QObject):
 
     def create_library(self, path):
         """ Create a new library"""
-        self.midi_library = MidiLibrary(path, self.library_update_progress)
-        self.search_algorithm = FingerPrinting(self.midi_library, self.library_update_progress,
-                                               **self.params)
+        if self.midi_library is None:
+            self.midi_library = MidiLibrary(path, self.library_update_progress)
+            self.search_algorithm = FingerPrinting(self.midi_library, self.library_update_progress,
+                                                   **self.params)
+        else:
+            self.midi_library._load_library(path, self.library_update_progress)
+            self.search_algorithm.create_fp_from_library(self.library_update_progress)
+
         self.finished.emit()
 
     def search(self, path: str, n_of_results):
@@ -83,6 +88,9 @@ class AsyncLibraryClass(QObject):
 
     def library_update_progress(self, called_from, act, max, name):
         """ Inform listeners about loading library progress"""
+        if max == 0:
+            max = 1
+
         if called_from == "lib":
             progress = int(act / max * 100 * 0.15)
             progress_text = "Loading file {}/{}...".format(act, max)

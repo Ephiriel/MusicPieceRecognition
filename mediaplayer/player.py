@@ -314,6 +314,10 @@ class AudioPlayer(QObject):
         def close(self):
             if not self.is_closed:
                 self.mixer.quit()
+
+                import pygame
+                pygame.quit()
+
                 self.is_closed = True
 
         def convert_input_to_mp3(self, input, output=None):

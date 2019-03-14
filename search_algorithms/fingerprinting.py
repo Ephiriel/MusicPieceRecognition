@@ -223,6 +223,7 @@ class FingerPrinting(AbstractMatchClass):
 
         # Create Fingerprint-Database
         self._fingerprints = dict()
+        self._in_db = set()
 
         # Use custom parameters
         self.N = kwargs.get(self.N_OF_NOTES, self.DEFAULT_N)
@@ -245,36 +246,47 @@ class FingerPrinting(AbstractMatchClass):
                                                 kwargs.get(self.TDR_WINDOW, self.DEFAULT_TDR_WINDOW),
                                                 kwargs.get(self.TDR_MASK, self.DEFAULT_TDR_MASK))
 
-        max_midi = database.get_length()
+        self.quantile = None
 
-        # Create fingerprints for each midifile in the database
-        for current, midifile in enumerate(database.get_midifiles()):
-            self.init_status = current / max_midi * 100
+        self.create_fp_from_library(notify_init_status)
 
-            if notify_init_status is not None:
-                notify_init_status("fp", current, max_midi, midifile.name)
+    def create_fp_from_library(self, notify_init_status=None):
+        max_midi = self.database.get_length() - len(self._in_db)
+        current = 0
 
-            if isinstance(midifile, MidiFile):
-                try:
-                    for fp in self.create_fingerprints(np.array(midifile.notes[0]), midifile.name):
-                        fplist = self._fingerprints.get(fp.hash, None)
-                        # check if hash is already in the list
-                        if fplist is None:
-                            # create new list
-                            self._fingerprints[fp.hash] = [fp]
-                        else:
-                            # otherwise append fingerprint to existing list
-                            fplist.append(fp)
-                except:
-                    notify_init_status("excpetion", -1, -1, "{} containts too few notes".format(midifile.name))
+        # Are there new items to add?
+        if max_midi > 0:
+            # Create fingerprints for each midifile in the database
+            for midifile in self.database.get_midifiles():
 
-        if self.percentile is not None:
-            lens = np.zeros(len(self._fingerprints))
-            for idx, key in enumerate(self._fingerprints):
-                lens[idx] = len(self._fingerprints[key])
-            self.quantile = np.percentile(lens, self.percentile)
-        else:
-            self.quantile = None
+                if notify_init_status is not None:
+                    notify_init_status("fp", current, max_midi, midifile.name)
+
+                if isinstance(midifile, MidiFile):
+                    try:
+                        if midifile.name not in self._in_db:
+                            current += 1
+                            self._in_db.add(midifile.name)
+
+                            for fp in self.create_fingerprints(np.array(midifile.notes[0]), midifile.name):
+                                fplist = self._fingerprints.get(fp.hash, None)
+                                # check if hash is already in the list
+                                if fplist is None:
+                                    # create new list
+                                    self._fingerprints[fp.hash] = [fp]
+                                else:
+                                    # otherwise append fingerprint to existing list
+                                    fplist.append(fp)
+                    except:
+                        notify_init_status("excpetion", -1, -1, "{} containts too few notes".format(midifile.name))
+
+            if self.percentile is not None:
+                lens = np.zeros(len(self._fingerprints))
+                for idx, key in enumerate(self._fingerprints):
+                    lens[idx] = len(self._fingerprints[key])
+                self.quantile = np.percentile(lens, self.percentile)
+            else:
+                self.quantile = None
 
         if notify_init_status is not None:
             notify_init_status("fp", max_midi, max_midi, "")
@@ -403,7 +415,7 @@ class FingerPrinting(AbstractMatchClass):
             matched_fp = match.fps_in_bins[pos]
             from_pos = min(matched_fp, key=lambda fp: fp.pos1)
             to_pos = max(matched_fp, key=lambda fp: fp.max_pos)
-            dict_result[match.db_name] = (score, i, (from_pos.pos1, to_pos.max_pos))
+            dict_result[match.db_name] = ((score, score/(len(match.query_fingerprints)*len(split_indexes))), i, (from_pos.pos1, to_pos.max_pos))
 
         if evaluate:
             return dict_result
