@@ -477,10 +477,11 @@ class PianoWidget(QtWidgets.QWidget):
                 selected_cnt += 1
 
         if set_y_to_default:
-            if select is None:
+            if select is None and cnt > 0:
                 self.view.centerOn(0, ysum/cnt)
             else:
-                self.view.centerOn(0, selected_ysum/selected_cnt)
+                if selected_cnt > 0:
+                    self.view.centerOn(0, selected_ysum/selected_cnt)
 
         self.piano.position_indicator.setVisible(True)
 

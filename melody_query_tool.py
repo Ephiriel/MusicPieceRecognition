@@ -36,7 +36,7 @@ class ApplicationWindow(QMainWindow):
         FingerPrinting.TDR_RANGE: 8.0,
         FingerPrinting.USE_VERIFICATION: False,
         FingerPrinting.ELIMINATE_TOP_PERCENTILE: 99,
-        FingerPrinting.SPLIT_QUERIES_LONGER_THAN: None,
+        FingerPrinting.SPLIT_QUERIES_LONGER_THAN: 20,
         FingerPrinting.SPLIT_QUERIES_SLIDING_WINDOW: 5,
         FingerPrinting.SPLIT_QUERY_LENGTH: 20
     }
@@ -483,7 +483,7 @@ class ApplicationWindow(QMainWindow):
                 item = QTableWidgetItem("{:.1f}".format(score))
                 item.setTextAlignment(Qt.AlignHCenter)
                 self.ui.result_table.setItem(rank - 1, 1, item)
-                item = QTableWidgetItem("{:.2f}".format(perc_score))
+                item = QTableWidgetItem("{:.1f}".format(perc_score*100))
                 item.setTextAlignment(Qt.AlignHCenter)
                 self.ui.result_table.setItem(rank - 1, 2, item)
                 item = QTableWidgetItem("{:.1f}".format(start))
