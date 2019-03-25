@@ -1,5 +1,3 @@
-from typing import Any, Tuple
-
 from search_algorithms.abstract_match_algorithm import AbstractMatchClass
 from library.midilibrary import MidiLibrary
 from library.midifile import MidiFile
@@ -45,7 +43,7 @@ class FingerPrinting(AbstractMatchClass):
     DEFAULT_TDR_MASK = 0x0000001F
     DEFAULT_SPLIT_QUERIES_LONGER_THAN = 20
     DEFAULT_SPLIT_QUERY_LENGTH = 20
-    DEFAULT_SPLIT_QUERIES_SLIDING_WINDOW = 5
+    DEFAULT_SPLIT_QUERIES_SLIDING_WINDOW = 2
 
     PARAM_SETTING_1 = {
         N_OF_NOTES: 3,
@@ -76,9 +74,9 @@ class FingerPrinting(AbstractMatchClass):
         TDR_MASK: 0x1FF,
         TDR_RANGE: 16.0,
         ELIMINATE_TOP_PERCENTILE: None,
-        SPLIT_QUERIES_LONGER_THAN: 20,
+        SPLIT_QUERIES_LONGER_THAN: 25,
         SPLIT_QUERIES_SLIDING_WINDOW: 5,
-        SPLIT_QUERY_LENGTH: 20
+        SPLIT_QUERY_LENGTH: 25
     }
 
     PARAM_SETTING_3 = {
@@ -93,9 +91,9 @@ class FingerPrinting(AbstractMatchClass):
         TDR_MASK: 0x1F,
         TDR_RANGE: 8.0,
         ELIMINATE_TOP_PERCENTILE: 99,
-        SPLIT_QUERIES_LONGER_THAN: 20,
+        SPLIT_QUERIES_LONGER_THAN: 25,
         SPLIT_QUERIES_SLIDING_WINDOW: 5,
-        SPLIT_QUERY_LENGTH: 20
+        SPLIT_QUERY_LENGTH: 25
     }
 
     class FingerPrintList(list):
@@ -459,16 +457,16 @@ class FingerPrinting(AbstractMatchClass):
         ####################################################
         # UNCOMMENT to view some clusters of the top results as plots
         #
-        # def plot_(name, query, clusters, top_score):
-        #     import matplotlib.pyplot as plt
-        #     for cluster in clusters:
-        #         plt.scatter(cluster.to_numpy()[:, 0], cluster.to_numpy()[:, 1], marker="x", alpha=0.5)
-        #     plt.scatter(top_score.to_numpy()[:, 0], top_score.to_numpy()[:, 1], marker="x", alpha=1)
-        #     plt.title("db={} | q={} score={}".format(name, query, top_score.score))
-        #     plt.show()
-        #
-        # for res in results[0:3]:
-        #     plot_(query_name, res[0], res[2], res[1])
+        def plot_(name, query, clusters, top_score):
+            import matplotlib.pyplot as plt
+            for cluster in clusters:
+                plt.scatter(cluster.to_numpy()[:, 0], cluster.to_numpy()[:, 1], marker="x", alpha=0.3)
+            plt.scatter(top_score.to_numpy()[:, 0], top_score.to_numpy()[:, 1], marker="x", alpha=1)
+            plt.title("db={} | q={} score={}".format(name, query, top_score.score))
+            plt.show()
+
+        for res in results[0:3]:
+            plot_(query_name, res[0], res[2], res[1])
         ####################################################
 
         if evaluate:
@@ -798,30 +796,3 @@ class FingerPrinting(AbstractMatchClass):
                 return (self.pos1 - other.pos1) >= 0
             else:
                 return False
-
-
-def main():
-    db = MidiLibrary("../small_db")
-    db.load_test_samples("../mylittlepownytest")
-    fp_alg = FingerPrinting(db)
-    fp_alg.evaluate(verbose=True)#, partial_test_selection=["10_COMBINED_ERROR_QUERY"])
-
-    # db = MidiLibrary("../../StartUp-Midis/midi_startup_modified")
-    # fp_alg = FingerPrinting(db)
-    # query_path = "../../Rode Mic Soundfiles OKTAV - Melodien/10487 - Fascinating Rhythm.mp3"
-    # from search_algorithms.transcribe_offline import Transcriptor
-    # transc = Transcriptor()
-    # mf = transc.process_file(query_path)
-    # fp_alg.search(mf)
-
-    # db = MidiLibrary("../../StartUp-Midis/midi_startup_modified")
-    # fp_alg = FingerPrinting(db)
-    # query_path = "../../StartUp-Midis/midi_startup_modified/Get Hold Of Yourself (Jamie Cullum) PVG.mid"
-    # # from search_algorithms.transcribe_offline import Transcriptor
-    # # transc = Transcriptor()
-    # mf = MidiFile("Get Hold Of Yourself (Jamie Cullum) PVG.mid", query_path)
-    # fp_alg.search(mf, evaluate=False)
-
-
-if __name__ == '__main__':
-    main()
