@@ -43,7 +43,7 @@ class FingerPrinting(AbstractMatchClass):
     DEFAULT_TDR_MASK = 0x0000001F
     DEFAULT_SPLIT_QUERIES_LONGER_THAN = 20
     DEFAULT_SPLIT_QUERY_LENGTH = 20
-    DEFAULT_SPLIT_QUERIES_SLIDING_WINDOW = 2
+    DEFAULT_SPLIT_QUERIES_SLIDING_WINDOW = 5
 
     PARAM_SETTING_1 = {
         N_OF_NOTES: 3,
@@ -457,16 +457,16 @@ class FingerPrinting(AbstractMatchClass):
         ####################################################
         # UNCOMMENT to view some clusters of the top results as plots
         #
-        def plot_(name, query, clusters, top_score):
-            import matplotlib.pyplot as plt
-            for cluster in clusters:
-                plt.scatter(cluster.to_numpy()[:, 0], cluster.to_numpy()[:, 1], marker="x", alpha=0.3)
-            plt.scatter(top_score.to_numpy()[:, 0], top_score.to_numpy()[:, 1], marker="x", alpha=1)
-            plt.title("db={} | q={} score={}".format(name, query, top_score.score))
-            plt.show()
-
-        for res in results[0:3]:
-            plot_(query_name, res[0], res[2], res[1])
+        # def plot_(name, query, clusters, top_score):
+        #     import matplotlib.pyplot as plt
+        #     for cluster in clusters:
+        #         plt.scatter(cluster.to_numpy()[:, 0], cluster.to_numpy()[:, 1], marker="x", alpha=0.3)
+        #     plt.scatter(top_score.to_numpy()[:, 0], top_score.to_numpy()[:, 1], marker="x", alpha=1)
+        #     plt.title("db={} | q={} score={}".format(name, query, top_score.score))
+        #     plt.show()
+        #
+        # for res in results[0:3]:
+        #     plot_(query_name, res[0], res[2], res[1])
         ####################################################
 
         if evaluate:
