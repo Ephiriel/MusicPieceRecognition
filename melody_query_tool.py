@@ -372,6 +372,7 @@ class ApplicationWindow(QMainWindow):
     def load_query(self, path):
         """ Helperfunction to load a selected query"""
         self.query_path = path
+        self.select_notes = None
         self.ui.currently_playing_label.setText(self.DEFAULT_PLAYER_TEXT)
         # Just load the file to the player, and let the player decide if its playable
         self.player.load(path)
@@ -484,7 +485,7 @@ class ApplicationWindow(QMainWindow):
                 item.setTextAlignment(Qt.AlignHCenter)
                 self.ui.result_table.setItem(rank - 1, 1, item)
                 item = QTableWidgetItem("{:.1f}".format(perc_score*100))
-                item.setTextAlignment(Qt.AlignHCenter)
+                item.setTextAlignment(Qt.AlignRight)
                 self.ui.result_table.setItem(rank - 1, 2, item)
                 item = QTableWidgetItem("{:.1f}".format(start))
                 item.setTextAlignment(Qt.AlignRight)

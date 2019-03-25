@@ -104,7 +104,6 @@ class FingerPrinting(AbstractMatchClass):
         of the fingerprint-algorithm, when a matched fingerprint-pair is appended
         or removed.
         """
-        max_score: Tuple[Any, Any]
 
         class BinFingerPrintList(list):
             """ Stores all fingerprints for a bin, and stores the lowest start position and highest end position"""
@@ -588,7 +587,7 @@ class FingerPrinting(AbstractMatchClass):
             return np.array(self)
 
         def get_score(self, max_score):
-            return self.score, self.score/max_score
+            return self.score, min(self.score/max_score, 0.999)
 
         def get_pos(self):
             return self.start, self.end
