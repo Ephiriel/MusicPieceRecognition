@@ -111,7 +111,7 @@ class AbstractMatchClass(ABC):
                 self.timestamp_level == 0 and verbose, "\r" + "|" + "=" * (1 + int(idx / len(queries) * 100 + 0.5)), end="")
 
             try:
-                score, rank, _ = self.search(query, evaluate=True)[query.name]
+                (score, _), rank, _ = self.search(query, evaluate=True)[query.name]
             except KeyError:
                 score = 0
                 rank = 0xFFFFFFFF

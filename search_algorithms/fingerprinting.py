@@ -28,8 +28,6 @@ class FingerPrinting(AbstractMatchClass):
     SPLIT_QUERY_LENGTH = "split_query_length"
     SPLIT_QUERIES_SLIDING_WINDOW = "query_split_sliding_window"
 
-    PLOT_COMPARISON = "plot_comparison"
-
     # Default parameters for Fingerprint Creation
     DEFAULT_N = 4
     DEFAULT_N_I = (3, 2, 2)
@@ -45,10 +43,8 @@ class FingerPrinting(AbstractMatchClass):
     DEFAULT_TDR_RESOLUTION = 16
     DEFAULT_TDR_WINDOW = 0.25
     DEFAULT_TDR_MASK = 0x0000001F
-    DEFAULT_USE_VERIFICATION = False
-    DEFAULT_PLOT_COMPARISON = False
-    DEFAULT_SPLIT_QUERIES_LONGER_THAN = 25
-    DEFAULT_SPLIT_QUERY_LENGTH = 25
+    DEFAULT_SPLIT_QUERIES_LONGER_THAN = 20
+    DEFAULT_SPLIT_QUERY_LENGTH = 20
     DEFAULT_SPLIT_QUERIES_SLIDING_WINDOW = 5
 
     PARAM_SETTING_1 = {
@@ -62,7 +58,6 @@ class FingerPrinting(AbstractMatchClass):
         TDR_WINDOW: 0.25,
         TDR_MASK: 0x1FF,
         TDR_RANGE: 16.0,
-        USE_VERIFICATION: False,
         ELIMINATE_TOP_PERCENTILE: None,
         SPLIT_QUERIES_LONGER_THAN: 25,
         SPLIT_QUERIES_SLIDING_WINDOW: 5,
@@ -80,7 +75,6 @@ class FingerPrinting(AbstractMatchClass):
         TDR_WINDOW: 0.25,
         TDR_MASK: 0x1FF,
         TDR_RANGE: 16.0,
-        USE_VERIFICATION: True,
         ELIMINATE_TOP_PERCENTILE: None,
         SPLIT_QUERIES_LONGER_THAN: 20,
         SPLIT_QUERIES_SLIDING_WINDOW: 5,
@@ -98,7 +92,6 @@ class FingerPrinting(AbstractMatchClass):
         TDR_WINDOW: 0.25,
         TDR_MASK: 0x1F,
         TDR_RANGE: 8.0,
-        USE_VERIFICATION: False,
         ELIMINATE_TOP_PERCENTILE: 99,
         SPLIT_QUERIES_LONGER_THAN: 20,
         SPLIT_QUERIES_SLIDING_WINDOW: 5,
@@ -113,7 +106,21 @@ class FingerPrinting(AbstractMatchClass):
         """
         max_score: Tuple[Any, Any]
 
-        def __init__(self, db_name, query_fingerprints, query_notes, query_name, ignore_doubles=True, **kwargs):
+        class BinFingerPrintList(list):
+            """ Stores all fingerprints for a bin, and stores the lowest start position and highest end position"""
+            def __init__(self):
+                super().__init__()
+                self.end = None
+                self.start = None
+
+            def append(self, obj):
+                super().append(obj)
+                if self.end is None or self.end.max_pos < obj.max_pos:
+                    self.end = obj
+                if self.start is None or self.start.pos1 > obj.pos1:
+                    self.start = obj
+
+        def __init__(self, db_name, query_fingerprints, query_notes, query_name, **kwargs):
             """
             Initialize function
             :param midifile: The midifile in the database
@@ -127,9 +134,8 @@ class FingerPrinting(AbstractMatchClass):
             self.query_notes = query_notes
             self.histogram = collections.Counter()
             self.fps_in_bins = dict()
+            self.query_fps_in_bins = dict()
             self.max_score = None
-            self.ignore_double_set = set()
-            self.ignore_doubles = ignore_doubles
 
         def append(self, matched_pair):
             """
@@ -138,28 +144,30 @@ class FingerPrinting(AbstractMatchClass):
             :return: None
             """
 
-            # For sequenced parameters ignore already added fingerprints, since they can be doubled due to overlapping window
-            if self.ignore_doubles and (matched_pair[0].hash, matched_pair[0].pos1) in self.ignore_double_set:
-                return
-
-            self.ignore_double_set.add((matched_pair[0].hash, matched_pair[0].pos1))
-
             super().append(matched_pair)
 
             mfp, qfp = matched_pair
 
             # calculate the speed ratio
-            r = mfp.td12 / qfp.td12
+            r = float(mfp.td12) / float(qfp.td12)
 
             # Update the histogram-diagonal score
             hpos = int(round(mfp.pos1 - qfp.pos1 * r))
             self.histogram[hpos] += 1
             bin_x = self.fps_in_bins.get(hpos, None)
             if bin_x is None:
-                bin_x = []
+                bin_x = self.BinFingerPrintList()
                 self.fps_in_bins[hpos] = bin_x
 
             bin_x.append(mfp)
+
+            bin_x = self.query_fps_in_bins.get(hpos, None)
+            if bin_x is None:
+                bin_x = self.BinFingerPrintList()
+                self.query_fps_in_bins[hpos] = bin_x
+
+            bin_x.append(qfp)
+
             new_score = self.histogram[hpos]
 
             # update the maximum score, if a higher one is reached
@@ -169,12 +177,10 @@ class FingerPrinting(AbstractMatchClass):
         def remove(self, matched_pair):
             super().remove(matched_pair)
 
-            self.ignore_double_set.discard((matched_pair[0].hash, matched_pair[0].pos1))
-
             mfp, qfp = matched_pair
 
             # calculate the speed ratio
-            r = mfp.td12 / qfp.td12
+            r = float(mfp.td12) / float(qfp.td12)
 
             hpos = int(round(mfp.pos1 - qfp.pos1 * r))
             old_score = self.histogram[hpos]
@@ -185,26 +191,23 @@ class FingerPrinting(AbstractMatchClass):
             if old_score == self.max_score[1]:
                 self.max_score = None  # clear max_score, so it has to be recalculated
 
-        def get_score(self, use_neighbors=False, filter=0):
+        def get_score(self):
             """
             Returns the highest diagonal score of the histogram
             :return: Highest score
             """
-            if self.max_score is None or use_neighbors:
+            if self.max_score is None:
                 highest_score = self.histogram.most_common(1)
                 if len(highest_score) > 0:
                     self.max_score = highest_score[0]
                 else:
                     return (-1, -1)
 
-                if use_neighbors:
-                    # Get the bin of the neighbor and add the score of other bins to it
-                    # but reduce score by the squared distance to the largest bin.
-                    scores = np.array(self.histogram.most_common())
-                    # filter scores above mean() * filter-value
-                    filtered_scores = scores[scores[:, 1] > scores[:, 1].mean()*filter]
-                    self.max_score = (self.max_score[0], (filtered_scores[:, 1]/(np.square(self.max_score[0] - filtered_scores[:, 0]) + 1)).sum())
-                return self.max_score
+            return self.max_score
+
+        def get_top_bins(self, filter_factor):
+            scores = np.array(self.histogram.most_common())
+            return scores[scores[:, 1] > scores[:, 1].mean() * filter_factor]
 
         def __str__(self):
             return self.db_name + str(self.get_score()[1])
@@ -231,7 +234,6 @@ class FingerPrinting(AbstractMatchClass):
         self.pitch_diff = kwargs.get(self.PITCH_DIFF, self.DEFAULT_PITCH_DIFF)
         self.d = kwargs.get(self.NOTE_DISTANCE, self.DEFAULT_D)
         self.verification_time_window = kwargs.get(self.VERIFICATION_TIME_WINDOW, self.DEFAULT_VERIFICATION_TIME_WINDOW)
-        self.use_verification = kwargs.get(self.USE_VERIFICATION, self.DEFAULT_USE_VERIFICATION)
         self.percentile = kwargs.get(self.ELIMINATE_TOP_PERCENTILE, None)
         self.split_queries_longer_than = kwargs.get(self.SPLIT_QUERIES_LONGER_THAN,
                                                     self.DEFAULT_SPLIT_QUERIES_LONGER_THAN)
@@ -268,7 +270,7 @@ class FingerPrinting(AbstractMatchClass):
                             current += 1
                             self._in_db.add(midifile.name)
 
-                            for fp in self.create_fingerprints(np.array(midifile.notes[0]), midifile.name):
+                            for fp in self.create_fingerprints(midifile.get_notes_for_fingerprints(), midifile.name)[0]:
                                 fplist = self._fingerprints.get(fp.hash, None)
                                 # check if hash is already in the list
                                 if fplist is None:
@@ -277,8 +279,11 @@ class FingerPrinting(AbstractMatchClass):
                                 else:
                                     # otherwise append fingerprint to existing list
                                     fplist.append(fp)
-                    except:
-                        notify_init_status("excpetion", -1, -1, "{} containts too few notes".format(midifile.name))
+                    except Exception as e:
+                        if notify_init_status is not None:
+                            notify_init_status("excpetion", -1, -1, "{} containts too few notes".format(midifile.name))
+                        else:
+                            print(e)
 
             if self.percentile is not None:
                 lens = np.zeros(len(self._fingerprints))
@@ -305,6 +310,7 @@ class FingerPrinting(AbstractMatchClass):
         """
         prev_hashes = dict()
         fingerprints = []
+        created = 0
 
         # First iterate over all notes
         for idx, e1 in enumerate(query_notes):
@@ -321,6 +327,7 @@ class FingerPrinting(AbstractMatchClass):
                             # generate fingerprint, if N=3
                             if self.N == 3:
                                 fp = self.FingerPrint(query_name, e1, e2, e3, None)
+                                created += 1
                                 if not remove_doubles or prev_hashes.get(fp.hash, True):
                                     fingerprints.append(fp)
                                     prev_hashes[fp.hash] = False
@@ -331,11 +338,12 @@ class FingerPrinting(AbstractMatchClass):
                                     for e4 in evt4:
                                         # generate fingerprint
                                         fp = self.FingerPrint(query_name, e1, e2, e3, e4)
+                                        created += 1
                                         if not remove_doubles or prev_hashes.get(fp.hash, True):
                                             fingerprints.append(fp)
                                             prev_hashes[fp.hash] = False
 
-        return fingerprints
+        return fingerprints, created
 
     def _select_next_events(self, query, start_idx, n_events):
         """
@@ -349,16 +357,16 @@ class FingerPrinting(AbstractMatchClass):
         :return: the index of the first picked event and the list of all selected events
         """
 
-        p, _, pos, _ = query[start_idx]
+        p, pos = query[start_idx]
         try:
             idx = start_idx + 1
 
-            p_next, _, pos_next, _ = query[idx]
+            p_next, pos_next = query[idx]
 
             # iterate until position self.d and pitch_diff self.pitch_diff requirements are met
             while (abs(pos_next - pos) < self.d) or (abs(p_next - p) > self.pitch_diff):
                 idx += 1
-                p_next, _, pos_next, _ = query[idx]
+                p_next, pos_next = query[idx]
         except IndexError:
             return -1, None
 
@@ -367,15 +375,29 @@ class FingerPrinting(AbstractMatchClass):
     def get_algorithm_name(self):
         return "FingerPrinting"
 
-    def search(self, query, query_name="", evaluate=True, get_top_x=1):
-        """ Start a search in the library"""
+    def search(self, query, query_name="", evaluate=False, get_top_x=1):
+        """This function does the actual matching
+        it has to return a dictionary, where for each element in the database, the dict contains:
+        [key, ((score, percent_score), rank, (start_of_best_match, end_of_best_match))] where:
+        key is the name of the file,
+        confidence is, how "sure" the algorithm is about this file beeing the query
+        rank is the position, e.g. what place the confidence is at
+        start_of_best_match gives the time, where the match started in the file
+        pass
+        If evaluate=False, the return value is a tuple of
+        (name, (score, percent_score), (start_of_best_match, end_of_best_match)) of the best matching database item.
+        get_top_x determines the size of the results, if evaluate = False
+        query_name: optional give a name to the query, if query is no MidiFile-Object
+        """
+
         if isinstance(query, MidiFile):
             query_name = query.name
-            query_notes = np.array(query.notes[0])
+            query_notes = query.get_notes_for_fingerprints()
         else:
             query_notes = query
 
         dict_result = dict()
+        created_fingerprints = 0
 
         # create splitable windows, if split_queries_longer_than is none or < 0, don't split
         no_split = self.split_queries_longer_than is None or self.split_queries_longer_than < 0 or self.split_query_length >= query_notes.shape[0]
@@ -386,111 +408,79 @@ class FingerPrinting(AbstractMatchClass):
 
         matchdict = dict()
 
-        for split_idx in split_indexes:
+        for idx, split_idx in enumerate(split_indexes):
             if no_split or split_idx + self.split_query_length > query_notes.shape[0] - self.split_queries_sliding_window:
                 split_end = query_notes.shape[0]
             else:
                 split_end = split_idx + self.split_query_length
 
             # perform a query for every split and save all results in matchdict,
-            split_query = query_notes[split_idx:split_end]
-            self.perform_query(split_query, query_name, pre_matched=matchdict)
+            split_query = query_notes[split_idx:split_end].copy()
+            # adopt the starting position for all split queries, so they start from 0 time
+            split_query[:, 1] = split_query[:, 1] - split_query[0, 1]
 
-        results = list(matchdict.values())
-        # make token verification on top 5%
-        if self.use_verification:
-            results = self._verify_results(results)
+            fp, histograms, created, _ = self.perform_query(split_query, query_name)
 
-        # Filter for splitted queries all bins > 1.25, for others use 1
-        if self.split_queries_longer_than is not None and self.split_queries_longer_than > 0:
-            filter = 1.25
-        else:
-            filter = 1
+            # count total amount of created fingerprints
+            created_fingerprints += created
+
+            # check every FingerPrintList from the performed query
+            for hist in histograms:
+                # create a list for every histogram in the result dictionary
+                top_bins = matchdict.get(hist.db_name, None)
+                if top_bins is None:
+                    top_bins = []
+                    matchdict[hist.db_name] = top_bins
+
+                # Add for the top bins in each histogram an entry in the list
+                # All bins above 1.25*bin_avg are added
+                for bin_pos, score in hist.get_top_bins(filter_factor=1.25):
+                    qfp = hist.query_fps_in_bins[bin_pos].start
+                    mfp = hist.fps_in_bins[bin_pos].start
+
+                    # Calculate a time ratio between the first matched query and database fingerprint
+                    # to scale the query position for the final evaluation
+                    r = float(mfp.td12) / float(qfp.td12)
+                    y_pos = (qfp.pos1 + query_notes[split_idx, 1]) * r
+                    x_pos = mfp.pos1
+                    top_bins.append((x_pos, y_pos, score, hist.fps_in_bins[bin_pos]))
+
+        results = []
+        # Find for every database item a diagonal and calculate the maximum score (e.g. cluster
+        # with highest score
+        for name in matchdict:
+            data = matchdict[name]
+            clusters = self.find_diagonals(data)
+            top_cluster = max(clusters, key=lambda cluster: cluster.score, default=self.Cluster())
+            results.append((name, top_cluster, clusters))
 
         # sort after score, including partially used neighbors
-        results = sorted(results, key=lambda itm: itm.get_score(use_neighbors=True, filter=filter)[1], reverse=True)
+        results = sorted(results, key=lambda itm: itm[1].score, reverse=True)
 
-        for i, match in enumerate(results, 1):
-            pos, score = match.get_score(use_neighbors=True, filter=filter)
-            matched_fp = match.fps_in_bins[pos]
-            from_pos = min(matched_fp, key=lambda fp: fp.pos1)
-            to_pos = max(matched_fp, key=lambda fp: fp.max_pos)
-            dict_result[match.db_name] = ((score, score/(len(match.query_fingerprints)*len(split_indexes))), i, (from_pos.pos1, to_pos.max_pos))
+        ####################################################
+        # UNCOMMENT to view some clusters of the top results as plots
+        #
+        # def plot_(name, query, clusters, top_score):
+        #     import matplotlib.pyplot as plt
+        #     for cluster in clusters:
+        #         plt.scatter(cluster.to_numpy()[:, 0], cluster.to_numpy()[:, 1], marker="x", alpha=0.5)
+        #     plt.scatter(top_score.to_numpy()[:, 0], top_score.to_numpy()[:, 1], marker="x", alpha=1)
+        #     plt.title("db={} | q={} score={}".format(name, query, top_score.score))
+        #     plt.show()
+        #
+        # for res in results[0:3]:
+        #     plot_(query_name, res[0], res[2], res[1])
+        ####################################################
 
         if evaluate:
+            for i, (name, match, _) in enumerate(results, 1):
+                dict_result[name] = (match.get_score(created_fingerprints), i, match.get_pos())
             return dict_result
         else:
             ranked_result = []
-            for i in range(get_top_x):
-                topname = results[i].db_name
-                score, rank, pos = dict_result[topname]
-                ranked_result.append((topname, score, pos))
+            for result in results[0:get_top_x]:
+                ranked_result.append((result[0], result[1].get_score(created_fingerprints), result[1].get_pos()))
             return ranked_result
-
-    def _verify_results(self, results):
-        """
-        Perform the verification step on the top 5 percont of the results list.
-        Compare for earch fingerprint-match 10 notes if they are equal, if less 50%
-        of the notes are equal, remove the fingerprint from the matched list
-        :param results: result list
-        :return: an updated result list
-        """
-
-        verified_results = []
-
-        for cnt, matches in enumerate(results):
-            if cnt > len(results) * 0.05:  # only check top 5 percent of results
-                break
-
-            verified_results.append(matches)
-
-            # if isinstance(matches, self.FingerPrintList):
-            for dbfp, qfp in matches:
-
-                # in order to determine the correct position of a matching pitch value in
-                # query and database file, calculate the pitch difference of the first matched
-                # fingerprint-event and the ratio of the time difference of the first 2 events
-                pitch_diff = qfp.p1 - dbfp.p1
-                t_ratio = qfp.td12 / dbfp.td12
-                t_diff = qfp.pos1 - dbfp.pos1 * t_ratio
-
-                # start_idx is either 0 (start of the file, or the fingerprint-start - 5
-                q_idx = max(0, qfp.idx1 - 5)
-                db_idx = max(0, dbfp.idx1 - 5)
-
-                compared_events = 0
-                matched_events = 0
-
-                query_notes = matches.query_notes
-                db_notes = np.array(self.database.get_midifile(matches.db_name).notes[0])
-
-                # max matches are 10 or the length of the query - 3 fingerprint-tokens
-                max_possible_matches = min(10, len(query_notes) - q_idx - 3, len(db_notes) - db_idx - 3)
-
-                while compared_events < max_possible_matches:
-                    # skip fingerprint-events
-                    if not (db_idx == dbfp.idx1 or db_idx == dbfp.idx2 or db_idx == dbfp.idx3):
-                        compared_events += 1
-
-                        q_pitch, _, q_pos, _ = query_notes[q_idx]
-                        db_pitch, _, db_pos, _ = db_notes[db_idx]
-                        # check if pitch-values match
-                        if q_pitch == db_pitch + pitch_diff:
-                            equ_db_pos = db_pos * t_ratio
-                            if (equ_db_pos + t_diff) - self.verification_time_window <= \
-                                    q_pos \
-                                    <= (equ_db_pos + t_diff) + self.verification_time_window:
-                                matched_events += 1
-
-                    q_idx += 1
-                    db_idx += 1
-
-                # < 80% of the events are matched
-                if matched_events / max_possible_matches < 0.5:
-                    matches.remove((dbfp, qfp))  # remove fingerprint from match
-
-        verified_results.sort(key=lambda itm: itm.get_score()[1], reverse=True)
-        return verified_results
 
     def get_hash_value_lengths(self):
         """
@@ -502,7 +492,7 @@ class FingerPrinting(AbstractMatchClass):
             lens[idx] = len(self._fingerprints[key])
         return lens
 
-    def perform_query(self, query_notes, query_name, pre_matched=None):
+    def perform_query(self, query_notes, query_name):
         """
         Search for the query by creating fingerprints of it
         and then, for each fingerprint ask for a dictionary entry.
@@ -510,8 +500,8 @@ class FingerPrinting(AbstractMatchClass):
         :param query_name:
         :return: the created fingerprints, a list of matched fingerprints and the "true" match for analysis
         """
-        query_fingerprints = self.create_fingerprints(query_notes, query_name, remove_doubles=True)
-        matched_queries = pre_matched if not None else dict()
+        query_fingerprints, created = self.create_fingerprints(query_notes, query_name, remove_doubles=True)
+        matched_queries = dict()
         for fp in query_fingerprints:
             for hash_val in fp.get_hash_iterator():
                 matched_fingerprint_list = self._fingerprints.get(hash_val, None)
@@ -532,7 +522,134 @@ class FingerPrinting(AbstractMatchClass):
 
         should_match = matched_queries.get(query_name, None)
 
-        return query_fingerprints, list(matched_queries.values()), should_match
+        return query_fingerprints, list(matched_queries.values()), created, should_match
+
+    class Cluster(list):
+        """
+        Class for fingerprint clusters and a distance measure
+        """
+        def __init__(self):
+            super().__init__()
+            self.score = 0
+            self.start = 0x7FFFFFFF
+            self.end = 0
+
+        def append(self, datapoint):
+            """
+            Append new datapoint to the list, tracks additionally the start and end position of
+            the fingerprints.
+            :param datapoint:
+            :return:
+            """
+            super().append(datapoint[0:2])
+
+            # Update score
+            self.score += datapoint[2]
+
+            # Update start and end positions.
+            if self.start > datapoint[3].start.pos1:
+                self.start = datapoint[3].start.pos1
+            if self.end < datapoint[3].end.max_pos:
+                self.end = datapoint[3].end.max_pos
+
+        def calc_distance(self, other):
+            """
+            Calculate euclidean distance, weighted by the slope, e.g. the higher the slope away
+            another datapoint is from the cluster
+            :param other:
+            :return:
+            """
+            lowest_distance = None
+            closest_point = None
+
+            for my_pos in self:
+                for their_pos in other:
+                    if my_pos[0] <= their_pos[0] and my_pos[1] <= their_pos[1]:
+                        # calculate euclidean distance
+                        dist = np.sqrt((my_pos[0]-their_pos[0])**2 + (my_pos[1]-their_pos[1])**2)
+
+                        x_dist = their_pos[0] - my_pos[0]
+                        y_dist = their_pos[1] - my_pos[1]
+
+                        # Calculate slope that is always >= 1
+                        slope = max(x_dist, y_dist) / max(min(x_dist, y_dist), 0.00001)
+
+                        # weight distance by slope, the further away from 1, the more penalty.
+                        dist *= slope
+
+                        # track lowest distance between all datapoints
+                        if lowest_distance is None or dist < lowest_distance:
+                            lowest_distance = dist
+                            closest_point = (my_pos[0], my_pos[1])
+
+            return lowest_distance, closest_point
+
+        def to_numpy(self):
+            return np.array(self)
+
+        def get_score(self, max_score):
+            return self.score, self.score/max_score
+
+        def get_pos(self):
+            return self.start, self.end
+
+    def find_diagonals(self, data: list):
+        """ Search for diagonals in the data-list with the following constraints:
+        New datapoints added to a new cluster have to be always in the top right of an existing cluster.
+        (x_new > x_cluster, y_new > y_cluster)
+        Slope: the slope between the new point and the closest clusterpoint has to be maximum 3
+        If none of the conditions are met, a new cluster is added.
+        For a new datapoint the cluster with the closest euclidean distance additionally weighted by the slope is chosen
+        Finally, for all clusters the one with the highest score (e.g. most fingerprints in it, is chosen"""
+        data.sort(key=lambda d: d[0])
+        clusters = []
+        for x, y, score, fps in data:
+            lowest_distance, closest_cluster, closest_point = self.get_closest_cluster(clusters, x, y)
+            # If no matching cluster for this datapoint is found, create a new one
+            # but allow if datapoint is exactly on the same position as another point (e.g. distance=0)
+            if closest_cluster is None or ((closest_point[0] >= x or closest_point[1] >= y) and (closest_point[0] != x or closest_point[1] != y)):
+                closest_cluster = self.Cluster()
+                clusters += [closest_cluster]
+                closest_cluster.append((x, y, score, fps))
+            else:
+                # check the slope
+                x_dist = x - closest_point[0]
+                y_dist = y - closest_point[1]
+
+                # calculate slope (always >= 1)
+                slope = max(x_dist, y_dist) / max(min(x_dist, y_dist), 0.00001)
+
+                # if the slope is larger then 3 create a new cluster, otherwise add to old
+                if y_dist < 0 or x_dist < 0 or slope > 3:
+                    new_cluster = self.Cluster()
+                    clusters += [new_cluster]
+                    new_cluster.append((x, y, score, fps))
+                else:
+                    closest_cluster.append((x, y, score, fps))
+        return clusters
+
+    @staticmethod
+    def get_closest_cluster(clusters, x, y):
+        """
+        Get closest cluster for points x,y using single linkage (closest point IN cluster to (x,y)
+        :param clusters: List of already existing clusters
+        :param x:
+        :param y:
+        :return: distance, closest cluster and point
+        """
+        closest_distance = None
+        closest_cluster = None
+        closest_point = None
+
+        for cluster in clusters:
+            dst, closest_p_in_cluster = cluster.calc_distance([(x, y)])
+            if dst is not None and closest_p_in_cluster is not None:
+                if closest_distance is None or dst < closest_distance:
+                    closest_distance = dst
+                    closest_cluster = cluster
+                    closest_point = closest_p_in_cluster
+
+        return closest_distance, closest_cluster, closest_point
 
     class FingerPrint(object):
         """
@@ -554,7 +671,7 @@ class FingerPrinting(AbstractMatchClass):
         TDR_K = 0
         TDR_D = 0
 
-        __slots__ = ("name", "p1", "pos1", "idx1", "idx2", "idx3", "td12", "hash", "max_pos")
+        __slots__ = ("name", "p1", "pos1", "td12", "hash", "max_pos")
 
         def __init__(self, name, e1, e2, e3, e4):
             if not self.PARAM_INIT:
@@ -562,14 +679,11 @@ class FingerPrinting(AbstractMatchClass):
 
             object.__setattr__(self, "name", name)
             object.__setattr__(self, "p1", e1[0])
-            object.__setattr__(self, "pos1", e1[2])
-            object.__setattr__(self, "idx1", e1[3])
-            object.__setattr__(self, "idx2", e2[3])
-            object.__setattr__(self, "idx3", e3[3])
-            object.__setattr__(self, "td12", e2[2] - e1[2])
-            object.__setattr__(self, "max_pos", e4[2] if self.TDR_HASH_TYPE == self.TDR_HASH_3 else e3[2])
+            object.__setattr__(self, "pos1", e1[1])
+            object.__setattr__(self, "td12", e2[1] - e1[1])
+            object.__setattr__(self, "max_pos", e4[1] if self.TDR_HASH_TYPE == self.TDR_HASH_3 else e3[1])
 
-            td23 = e3[2] - e2[2]
+            td23 = e3[1] - e2[1]
 
             if td23 > self.td12:
                 tdr = abs(td23 / self.td12)
@@ -685,3 +799,30 @@ class FingerPrinting(AbstractMatchClass):
                 return (self.pos1 - other.pos1) >= 0
             else:
                 return False
+
+
+def main():
+    db = MidiLibrary("../small_db")
+    db.load_test_samples("../mylittlepownytest")
+    fp_alg = FingerPrinting(db)
+    fp_alg.evaluate(verbose=True)#, partial_test_selection=["10_COMBINED_ERROR_QUERY"])
+
+    # db = MidiLibrary("../../StartUp-Midis/midi_startup_modified")
+    # fp_alg = FingerPrinting(db)
+    # query_path = "../../Rode Mic Soundfiles OKTAV - Melodien/10487 - Fascinating Rhythm.mp3"
+    # from search_algorithms.transcribe_offline import Transcriptor
+    # transc = Transcriptor()
+    # mf = transc.process_file(query_path)
+    # fp_alg.search(mf)
+
+    # db = MidiLibrary("../../StartUp-Midis/midi_startup_modified")
+    # fp_alg = FingerPrinting(db)
+    # query_path = "../../StartUp-Midis/midi_startup_modified/Get Hold Of Yourself (Jamie Cullum) PVG.mid"
+    # # from search_algorithms.transcribe_offline import Transcriptor
+    # # transc = Transcriptor()
+    # mf = MidiFile("Get Hold Of Yourself (Jamie Cullum) PVG.mid", query_path)
+    # fp_alg.search(mf, evaluate=False)
+
+
+if __name__ == '__main__':
+    main()

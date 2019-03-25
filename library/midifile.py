@@ -51,6 +51,9 @@ class MidiFile:
 
         midi.write_midifile(store_path, self._pattern)
 
+    def get_notes_for_fingerprints(self, track=0):
+        return np.delete(np.array(self.notes[track]), (1, 3), axis=1)
+
     def randomize_timings(self, deviation=0.2, probability=1.0):
         """Randomly change all notes length, a note is changed with the given
         probability. The new length is gaussian distributed around the current length

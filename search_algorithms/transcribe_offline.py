@@ -33,16 +33,15 @@ class Transcriptor:
 
     def process_file(self, input):
         """ Transform input to a note and duration list.
-        The output is transformed to a 4 column table to be compatible
-        with MIDI-File output."""
+        The output is a 2 column table."""
         activations = self.rnn_processor.process(input)
         notes = self.peak_picker(activations)
         if notes.shape[0] < 3:
             raise Exception("Not enough notes in query detected")
-        # Bring notes in compatible form
-        retval = np.zeros((notes.shape[0], 4))
+        retval = np.zeros(notes.shape)
         retval[:, 0] = notes[:, 1]
-        retval[:, 2] = notes[:, 0]
+        retval[:, 1] = notes[:, 0]
+
         return retval
 
 
